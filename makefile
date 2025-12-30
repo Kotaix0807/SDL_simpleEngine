@@ -1,19 +1,21 @@
 CC      = gcc
 CFLAGS_BASE = -Wall -Wextra -Wpedantic -std=c11 -Iinclude
 SANITIZERS ?= -fsanitize=address,undefined
-CFLAGS  = $(CFLAGS_BASE) $(SANITIZERS)
+LSAN_SUPP  = lsan.supp
+CFLAGS  = $(CFLAGS_BASE) $(SANITIZERS) `sdl2-config --cflags`
 LDFLAGS = $(SANITIZERS)
-LDLIBS  = -lncurses
+LDLIBS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
-DEPS_PATH  = include
-SRC_PATH   = src
+SRC_DIR   = src
+BUILD_DIR = build
+INC_DIR   = include
 
-ROOT_SRC   = main.c
-DEPS       = $(wildcard $(DEPS_PATH)/*.h)
-SRCS_DEPS  = $(notdir $(wildcard $(SRC_PATH)/*.c))
+SRCS = main.c $(wildcard $(SRC_DIR)/*.c)
+HEADERS = $(wildcard $(INC_DIR)/*.h)
 
-SRCS_PREFIX = $(ROOT_SRC) $(addprefix $(SRC_PATH)/,$(SRCS_DEPS))
-DEPS_PREFIX = $(addprefix $(DEPS_PATH)/,$(DEPS))
+OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(notdir $(SRCS)))
+
+TARGET = $(BUILD_DIR)/game
 
 VALGRIND_FLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes
 VALGRIND = valgrind $(VALGRIND_FLAGS)
@@ -21,27 +23,49 @@ VALGRIND = valgrind $(VALGRIND_FLAGS)
 VALGRIND_FREE_FLAGS := valgrind --leak-check=full --show-leak-kinds=definite
 VALGRIND_FREE := valgrind $(VALGRIND_FREE_FLAGS)
 
-OBJS = $(SRCS_PREFIX:.c=.o)
+.PHONY: all clean run leaks test
 
-.PHONY: all build run leaks clean
+all: $(TARGET)
 
-all: build
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-build: $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+$(TARGET): $(OBJS) | $(BUILD_DIR)
+	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
-%.o: %.c $(DEPS_PREFIX)
+$(BUILD_DIR)/main.o: main.c $(HEADERS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 run:
 	@$(MAKE) clean
-	@$(MAKE) build
-	clear && ./build || stty sane; tput cnorm
+	@$(MAKE) all
+	clear && LSAN_OPTIONS=suppressions=$(LSAN_SUPP) $(TARGET) || stty sane; tput cnorm
 
 leaks:
 	@$(MAKE) clean
-	@$(MAKE) SANITIZERS= LDFLAGS= build
-	$(VALGRIND_FREE) ./build
+	@$(MAKE) SANITIZERS= LDFLAGS= all
+	$(VALGRIND_FREE) $(TARGET)
 
 clean:
-	rm -f build $(OBJS)
+	rm -rf $(BUILD_DIR)
+
+# Test individual: make test FILE=config
+# Compila y ejecuta un solo archivo .c del directorio src/
+test:
+ifndef FILE
+	@echo "Error: Debes especificar FILE=nombre_archivo"
+	@echo "Uso: make test FILE=config"
+	@echo ""
+	@echo "Archivos disponibles:"
+	@ls -1 $(SRC_DIR)/*.c 2>/dev/null | xargs -n1 basename -s .c | sed 's/^/  - /' || echo "  (ninguno)"
+	@exit 1
+endif
+	@mkdir -p $(BUILD_DIR)
+	@echo "=== Compilando $(FILE).c ==="
+	$(CC) $(CFLAGS) -DTEST_MAIN $(SRC_DIR)/$(FILE).c -o $(BUILD_DIR)/test_$(FILE) $(LDLIBS)
+	@echo "=== Ejecutando test_$(FILE) ==="
+	@echo ""
+	@$(BUILD_DIR)/test_$(FILE) || stty sane

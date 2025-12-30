@@ -1,0 +1,33 @@
+# Archivos de compilación
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# Ejecutables
+game
+*.exe
+*.out
+
+# Archivos de depuración
+*.log
+*.dSYM/
+vgcore.*
+core
+*.core
+
+# Archivos temporales de editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Archivos de compilación específicos
+compile_flags.txt
+
+# Archivos de sistema
+Thumbs.db

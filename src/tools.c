@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <SDL.h>
+#include <wchar.h>
 
 #include "config.h"
 #include "tools.h"
@@ -167,7 +169,14 @@ char *typeAdmited(valid_type type)
             return "imagen";
         case SOUND:
             return "sonido";
+        default:
+            return "desconocido";
     }
+}
+
+void GetTextureSize(SDL_Texture* texture, int* width, int* height)
+{
+    SDL_QueryTexture(texture, NULL, NULL, width, height);
 }
 
 #ifdef TOOLS_DEBUG

@@ -31,3 +31,6 @@ compile_flags.txt
 
 # Archivos de sistema
 Thumbs.db
+
+# Claude 
+.claude/

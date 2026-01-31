@@ -1,7 +1,9 @@
 #include <SDL_mixer.h>
 #include <SDL_image.h>
 
+#include "arduino.h"
 #include "engine.h"
+#include "SDL_mouse.h"
 #include "SDL_render.h"
 #include "config.h"
 #include "img.h"
@@ -9,7 +11,7 @@
 #include "tools.h"
 
 bool INSTANCE = true;
-int Last_frame = 0;
+int last_frame = 0;
 float deltatime = 0.0f;
 SDL_Renderer *render = NULL;
 SDL_Window *window = NULL;
@@ -49,6 +51,10 @@ bool Game_Init()
 	{
 		printDebug("No se pudo iniciar TTF: %s\n", TTF_GetError());
 		return false;
+	}
+	if (!arduinoConnect())
+	{
+		printDebug("No se pudo conectar con Arduino (continuando sin él)\n");
 	}
 	return true;
 }
@@ -96,8 +102,8 @@ void Game_KeyboardInput()
 void Game_UpdateFrame()
 {
 	Uint32 actualTime = SDL_GetTicks();
-	deltatime = (actualTime - Last_frame) / 1000.0f;
-	Last_frame = actualTime;
+	deltatime = (actualTime - last_frame) / 1000.0f;
+	last_frame = actualTime;
 
 
 	int WaitTime = FRAME_TIME_MS(config.fps) - (SDL_GetTicks() - actualTime);
@@ -110,17 +116,13 @@ void Game_Render()
 	SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
 	SDL_RenderClear(render);
 
-	//Render otros aqui.
-	SDL_Rect rect = { .x=0, .y=0, .w=40 * 10, .h=40 * 10};
-	SDL_Rect rect2 ={ .x=0, .y=0, .w=40 * 10, .h=40 * 10};
-	//Eventos aqui.
-	SDL_RenderCopy(render, fotos.array_textures[0], &rect, &rect2);
-
+	SDL_GetMouseState(&MouseX, &MouseY);
 	SDL_RenderPresent(render);
 }
 
 void Game_Destroy()
 {
+	arduinoDisconnect();
     SDL_DestroyRenderer(render);
     SDL_DestroyWindow(window);
 

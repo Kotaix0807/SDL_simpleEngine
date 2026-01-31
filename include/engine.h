@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 extern bool INSTANCE;
-extern int Last_frame;
+extern int last_frame;
 extern float deltatime;
 extern SDL_Renderer *render;
 extern SDL_Window *window;

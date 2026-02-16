@@ -1,13 +1,38 @@
+/**
+ * @file config.c
+ * @brief Implementacion de la carga e impresion de configuracion del motor.
+ *        Lee archivos .ini con secciones [Video], [Audio], [Game] y [Debug],
+ *        y almacena los valores en una estructura GameConfig.
+ */
+
+// ============================================================
+// Includes
+// ============================================================
+
 #include <stdio.h>
 #include <string.h>
 
 #include "tools.h"
 #include "config.h"
 
+// ============================================================
+// Variables globales
+// ============================================================
+
+/** @brief Instancia global de la configuracion, inicializada a cero. */
 GameConfig config = {0};
 
-//#define CFG_DEBUG
+// #define CFG_DEBUG
 
+// ============================================================
+// Funciones publicas
+// ============================================================
+
+/**
+ * @brief Abre y parsea un archivo .ini linea por linea, llenando la
+ *        estructura GameConfig con los valores encontrados en cada seccion.
+ *        Ignora lineas vacias y comentarios que empiezan con '#'.
+ */
 bool loadConfig(GameConfig *cfg, char *cfg_name)
 {
     FILE *cfg_file = fopen(cfg_name, "r");
@@ -66,6 +91,11 @@ bool loadConfig(GameConfig *cfg, char *cfg_name)
     return true;
 }
 
+/**
+ * @brief Imprime todos los campos de la configuracion a stdout, agrupados
+ *        por seccion ([Video], [Audio], [Game], [Debug]). Si el puntero
+ *        es NULL, muestra un mensaje de error via printDebug.
+ */
 void printConfig(GameConfig *cfg)
 {
     if(!cfg)
@@ -98,6 +128,7 @@ int main()
     GameConfig gamecfg = {0};
     loadConfig(&gamecfg, CONFIG_DIR "hd.ini");
     printConfig(&gamecfg);
+    printf("\nFPS: %d\n", gamecfg.fps);
 
     return 0;
 }

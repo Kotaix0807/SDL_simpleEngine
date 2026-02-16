@@ -1,3 +1,11 @@
+/**
+ * @file img.c
+ * @brief Implementacion del sistema de texturas. Carga desde directorio, dibujo y liberacion.
+ */
+
+// ============================================================
+// Includes
+// ============================================================
 #include "img.h"
 #include "engine.h"
 #include "tools.h"
@@ -6,6 +14,17 @@
 
 //#define IMG_DEBUG
 
+// ============================================================
+// Variables privadas
+// ============================================================
+
+static const char *imageExtensions[] = {".png", ".jpg", ".jpeg", ".bmp"}; // Extensiones validas
+
+// ============================================================
+// Inicializacion y cierre
+// ============================================================
+
+// Inicializa SDL_image con soporte PNG.
 bool initTexture(void)
 {
     if (IMG_Init(IMG_INIT_PNG) == 0)
@@ -16,8 +35,19 @@ bool initTexture(void)
     return true;
 }
 
-static const char *imageExtensions[] = {".png", ".jpg", ".jpeg", ".bmp"};
+// Cierra SDL_image y el subsistema de video.
+void quitTexture(void)
+{
+	IMG_Quit();
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
 
+// ============================================================
+// Gestion de librerias de texturas
+// ============================================================
+
+// Carga todas las imagenes de un directorio.
+// Cada imagen se convierte en una SDL_Texture con su SDL_Rect asociado.
 texture initTextureLib(char *path)
 {
 	texture current = {0};
@@ -47,7 +77,8 @@ texture initTextureLib(char *path)
 	current.n = n;
 
 	for (int i = 0; i < n; i++)
-	{	
+	{
+		// Construir ruta completa: directorio + nombre de archivo
 		char image_path[strlen(path) + strlen(textures_array[i]) + 1];
 		snprintf(image_path, sizeof(image_path), "%s%s", path, textures_array[i]);
 		SDL_Surface *srf = IMG_Load(image_path);
@@ -73,6 +104,7 @@ texture initTextureLib(char *path)
 	return current;
 }
 
+// Libera texturas, rectangulos y resetea el contador.
 void freeTextureLib(texture *txr)
 {
 	if(!txr)
@@ -91,12 +123,11 @@ void freeTextureLib(texture *txr)
 	txr->n = 0;
 }
 
-void quitTexture(void)
-{
-	IMG_Quit();
-	SDL_QuitSubSystem(SDL_INIT_VIDEO);
-}
+// ============================================================
+// Utilidades de textura
+// ============================================================
 
+// Consulta el tamano de la textura y lo asigna al rectangulo.
 void assignRectToTexture(SDL_Texture *texture, SDL_Rect *rect)
 {
 	int w = 0, h = 0;
@@ -117,6 +148,12 @@ void assignRectToTexture(SDL_Texture *texture, SDL_Rect *rect)
 	rect->h = h;
 }
 
+// ============================================================
+// Dibujo
+// ============================================================
+
+// Dibuja una textura con coordenadas float (SDL_FRect).
+// Si w o h son <= 0, usa el tamano original de la textura.
 void drawImageF(float x, float y, float w, float h, SDL_Texture *texture)
 {
 	if(!texture)
@@ -145,6 +182,8 @@ void drawImageF(float x, float y, float w, float h, SDL_Texture *texture)
 	SDL_RenderCopyF(render, texture, &srcrect, &destrect);
 }
 
+// Dibuja una textura con coordenadas enteras (SDL_Rect).
+// Si w o h son <= 0, usa el tamano original de la textura.
 void drawImage(int x, int y, int w, int h, SDL_Texture *texture)
 {
 	if(!texture)
@@ -173,6 +212,7 @@ void drawImage(int x, int y, int w, int h, SDL_Texture *texture)
 	SDL_RenderCopy(render, texture, &srcrect, &destrect);
 }
 
+// Dibuja las aristas de un rectangulo con el color especificado.
 void renderRect(SDL_Rect *rect, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
 	SDL_SetRenderDrawColor(render, r, g, b, a);

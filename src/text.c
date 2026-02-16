@@ -1,3 +1,16 @@
+/**
+ * @file text.c
+ * @brief Implementacion del sistema de renderizado de texto con cache de texturas.
+ *
+ * Gestiona la carga de fuentes, la creacion de objetos Text y el
+ * renderizado eficiente mediante texturas cacheadas que solo se
+ * regeneran cuando el contenido cambia.
+ */
+
+// ============================================================
+//  Includes
+// ============================================================
+
 #define _POSIX_C_SOURCE 200809L
 #include "text.h"
 #include "engine.h"
@@ -5,9 +18,21 @@
 #include <string.h>
 #include <stdlib.h>
 
+// ============================================================
+//  Variables privadas
+// ============================================================
+
+/** @brief Fuente TTF cargada por defecto para todos los objetos Text. */
 static TTF_Font *defaultFont = NULL;
+
+/** @brief Color por defecto (blanco opaco) usado al crear texto sin color explicito. */
 static SDL_Color defaultColor = {255, 255, 255, 255};
 
+// ============================================================
+//  Sistema de texto
+// ============================================================
+
+/** @brief Inicializa el sistema de texto cargando la fuente por defecto. */
 bool Text_InitSystem(const char *fontPath, int defaultSize)
 {
     defaultFont = TTF_OpenFont(fontPath, defaultSize);
@@ -19,6 +44,7 @@ bool Text_InitSystem(const char *fontPath, int defaultSize)
     return true;
 }
 
+/** @brief Cierra el sistema de texto y libera la fuente por defecto. */
 void Text_QuitSystem(void)
 {
     if (defaultFont)
@@ -29,7 +55,17 @@ void Text_QuitSystem(void)
     TTF_Quit();
 }
 
-// Función interna para renderizar texto a textura
+// ============================================================
+//  Funciones internas (static)
+// ============================================================
+
+/**
+ * @brief Renderiza el contenido de un Text a una textura SDL.
+ *
+ * Destruye la textura previa si existe, genera una nueva superficie
+ * con TTF_RenderUTF8_Blended y la convierte en textura. Actualiza
+ * las dimensiones del rect del texto.
+ */
 static void Text_Render(Text *text)
 {
     if (text->texture)
@@ -51,11 +87,17 @@ static void Text_Render(Text *text)
     SDL_FreeSurface(surface);
 }
 
+// ============================================================
+//  Creacion y manipulacion de texto
+// ============================================================
+
+/** @brief Crea un texto en la posicion indicada con el color por defecto. */
 Text Text_Create(const char *content, int x, int y)
 {
     return Text_CreateColored(content, x, y, defaultColor);
 }
 
+/** @brief Crea un texto con color personalizado en la posicion indicada. */
 Text Text_CreateColored(const char *content, int x, int y, SDL_Color color)
 {
     Text text = {0};
@@ -73,6 +115,7 @@ Text Text_CreateColored(const char *content, int x, int y, SDL_Color color)
     return text;
 }
 
+/** @brief Actualiza el contenido del texto, re-renderizando solo si cambia. */
 void Text_Set(Text *text, const char *content)
 {
     // Si el contenido es igual, no hacer nada (optimización clave)
@@ -84,12 +127,14 @@ void Text_Set(Text *text, const char *content)
     Text_Render(text);
 }
 
+/** @brief Dibuja el texto en pantalla usando el renderer global. */
 void Text_Draw(Text *text)
 {
     if (text->texture)
         SDL_RenderCopy(render, text->texture, NULL, &text->rect);
 }
 
+/** @brief Libera la textura y la cadena de contenido de un objeto Text. */
 void Text_Free(Text *text)
 {
     if (text->texture)

@@ -1,6 +1,18 @@
+/**
+ * @file sound.c
+ * @brief Implementacion del modulo de audio: inicializacion, reproduccion de SFX y gestion de librerias de sonido y musica.
+ */
+
+// ============================================================
+// Includes
+// ============================================================
 #include "sound.h"
 #include "config.h"
 #include "tools.h"
+
+// ============================================================
+// Variables privadas
+// ============================================================
 
 #define MAX_CHANNELS 16
 
@@ -13,6 +25,12 @@ typedef struct {
 
 static ChannelData channel_chunks[MAX_CHANNELS] = {0};
 
+// ============================================================
+// Funciones internas (static)
+// ============================================================
+
+// Callback invocado por SDL_mixer cuando un canal termina de reproducir.
+// Libera el chunk asociado y marca el canal como disponible.
 static void channelDoneCallback(int channel)
 {
     if (channel >= 0 && channel < MAX_CHANNELS && channel_chunks[channel].in_use)
@@ -26,6 +44,11 @@ static void channelDoneCallback(int channel)
     }
 }
 
+// ============================================================
+// Inicializacion y cierre
+// ============================================================
+
+// Inicializa el subsistema de audio de SDL y abre el dispositivo de mezcla (44100 Hz, stereo).
 bool initAudio(void)
 {
     if (SDL_WasInit(SDL_INIT_AUDIO) == 0)
@@ -45,12 +68,19 @@ bool initAudio(void)
     return true;
 }
 
+// Cierra el dispositivo de mezcla y libera el subsistema de audio de SDL.
 void quitAudio(void)
 {
     Mix_CloseAudio();
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
+// ============================================================
+// Reproduccion
+// ============================================================
+
+// Reproduce un efecto de sonido una vez y lo libera automaticamente al finalizar
+// mediante el callback channelDoneCallback.
 void playAndFreeSfx(const char *sound)
 {
     if (!initAudio())
@@ -84,7 +114,12 @@ void playAndFreeSfx(const char *sound)
     }
 }
 
+// ============================================================
+// Gestion de librerias de audio
+// ============================================================
 
+// Crea una libreria de efectos de sonido cargando todos los archivos de audio
+// encontrados en el directorio indicado.
 sfx *initSfxLib(char *path)
 {
     int sfx_count = 0;
@@ -94,7 +129,7 @@ sfx *initSfxLib(char *path)
         printDebug("No se pudo inicializar la libreria sfx en la carpeta '%s'\n", path);
         return NULL;
     }
-    
+
     if(sfx_count <= 0)
     {
         printDebug("No se encontraron archivos de audio en '%s'\n", path);
@@ -123,12 +158,14 @@ sfx *initSfxLib(char *path)
         if(!cur->chunks[i])
             printDebug("Error al cargar %s: %s\n", fullpath, Mix_GetError());
         if (sounds[i])
-            free(sounds[i]);   
+            free(sounds[i]);
     }
     free(sounds);
     return cur;
 }
 
+// Crea una libreria de musica cargando todos los archivos de audio
+// encontrados en el directorio indicado.
 music *initMusicLib(char *path)
 {
     int music_count = 0;
@@ -175,6 +212,7 @@ music *initMusicLib(char *path)
     return cur;
 }
 
+// Libera todos los chunks de una libreria de efectos de sonido y la estructura misma.
 void freeSfxLib(sfx *cur)
 {
     if(!cur)
@@ -193,6 +231,7 @@ void freeSfxLib(sfx *cur)
     free(cur);
 }
 
+// Libera todas las pistas de una libreria de musica y la estructura misma.
 void freeMusicLib(music *cur)
 {
     if(!cur)

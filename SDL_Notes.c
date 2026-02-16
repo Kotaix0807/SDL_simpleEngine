@@ -350,6 +350,71 @@ const Uint8 *keys = SDL_GetKeyboardState(NULL);
 if (keys[SDL_SCANCODE_W]) { /* mover arriba */ }
 if (keys[SDL_SCANCODE_A]) { /* mover izquierda */ }
 
+/*
+ * SDL_MOUSEWHEEL - Evento de rueda del ratón
+ * Se dispara cuando el usuario gira la rueda o hace scroll en el touchpad.
+ *
+ * Campos de event.wheel:
+ *   x         Scroll horizontal (positivo = derecha, negativo = izquierda)
+ *   y         Scroll vertical   (positivo = arriba,  negativo = abajo)
+ *   direction SDL_MOUSEWHEEL_NORMAL o SDL_MOUSEWHEEL_FLIPPED
+ *   preciseX  Scroll horizontal con precisión flotante (SDL 2.0.18+)
+ *   preciseY  Scroll vertical con precisión flotante   (SDL 2.0.18+)
+ *   mouseX    Posición X del ratón al momento del scroll (SDL 2.26.0+)
+ *   mouseY    Posición Y del ratón al momento del scroll (SDL 2.26.0+)
+ *
+ * IMPORTANTE: Algunos sistemas (macOS "natural scrolling") invierten la
+ * dirección. SDL lo indica con event.wheel.direction:
+ *
+ *   SDL_MOUSEWHEEL_NORMAL   y > 0 = scroll arriba (alejarse de usuario)
+ *   SDL_MOUSEWHEEL_FLIPPED  y > 0 = scroll abajo  (dirección invertida)
+ *
+ * Para normalizar la dirección y que funcione igual en todos los sistemas:
+ */
+case SDL_MOUSEWHEEL: {
+    float scroll_x = event.wheel.preciseX;
+    float scroll_y = event.wheel.preciseY;
+    if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+        scroll_x *= -1;
+        scroll_y *= -1;
+    }
+    // scroll_y > 0 = arriba, scroll_y < 0 = abajo (siempre consistente)
+    break;
+}
+
+/*
+ * Ejemplo: Zoom con la rueda del ratón
+ */
+float zoom = 1.0f;
+case SDL_MOUSEWHEEL: {
+    float dy = event.wheel.preciseY;
+    if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) dy *= -1;
+    zoom += dy * 0.1f;
+    if (zoom < 0.1f) zoom = 0.1f;
+    if (zoom > 5.0f) zoom = 5.0f;
+    break;
+}
+
+/*
+ * Ejemplo: Scroll de una lista o menú
+ */
+int scroll_offset = 0;
+int item_height = 32;
+case SDL_MOUSEWHEEL: {
+    int dy = event.wheel.y;
+    if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) dy *= -1;
+    scroll_offset -= dy * item_height;  // dy>0 (arriba) mueve contenido hacia arriba
+    if (scroll_offset < 0) scroll_offset = 0;
+    break;
+}
+
+/*
+ * Nota: event.wheel.y es entero (pasos discretos, normalmente 1 o -1).
+ *       event.wheel.preciseY es float (permite scroll suave en touchpads).
+ *       Usa preciseY cuando necesites scroll fino (zoom, paneos).
+ *       Usa y cuando necesites pasos discretos (navegar ítems de un menú).
+ */
+
 /* ============================================================================
  *  TIEMPO
  * ============================================================================ */
@@ -476,6 +541,126 @@ SDL_RenderFillRect(render, &rect);     // Rectángulo relleno
 
 SDL_RenderDrawLine(render, 0, 0, 800, 600);       // Línea
 SDL_RenderDrawPoint(render, 400, 300);             // Punto individual
+
+/* ============================================================================
+ *  DETECCION DE COLISIONES
+ * ============================================================================ */
+
+/*
+ * SDL_PointInRect(point, rect)
+ * Comprueba si un punto (SDL_Point) esta dentro de un rectangulo (SDL_Rect).
+ * Devuelve SDL_TRUE si el punto esta dentro, SDL_FALSE si no.
+ *
+ * Uso tipico: detectar si el mouse esta sobre un objeto.
+ */
+int mx, my;
+SDL_GetMouseState(&mx, &my);
+
+SDL_Point mousePoint = {mx, my};
+SDL_Rect objeto = {100, 100, 64, 64};
+
+if (SDL_PointInRect(&mousePoint, &objeto)) {
+    // El mouse esta sobre el objeto
+}
+
+/*
+ * Deteccion manual (equivalente sin SDL_PointInRect):
+ *
+ *   if (mx >= rect.x && mx <= rect.x + rect.w &&
+ *       my >= rect.y && my <= rect.y + rect.h)
+ *
+ * SDL_PointInRect es una macro inline, no tiene overhead.
+ */
+
+/*
+ * SDL_HasIntersection(rectA, rectB)
+ * Comprueba si dos rectangulos se superponen (colision AABB).
+ * Devuelve SDL_TRUE si hay interseccion, SDL_FALSE si no.
+ *
+ * Es la forma mas comun de detectar colisiones en juegos 2D.
+ */
+SDL_Rect jugador  = {100, 100, 32, 32};
+SDL_Rect enemigo  = {120, 110, 32, 32};
+
+if (SDL_HasIntersection(&jugador, &enemigo)) {
+    // Hay colision entre jugador y enemigo
+}
+
+/*
+ * SDL_IntersectRect(rectA, rectB, result)
+ * Igual que HasIntersection, pero ademas calcula el rectangulo de
+ * interseccion (el area donde se superponen).
+ * Devuelve SDL_TRUE si hay interseccion.
+ *
+ * Util para saber CUANTO se superponen (por ejemplo, para empujar
+ * al jugador fuera de una pared).
+ */
+SDL_Rect overlap;
+if (SDL_IntersectRect(&jugador, &enemigo, &overlap)) {
+    // overlap.w y overlap.h indican cuanto se superponen
+    // overlap.x y overlap.y indican donde empieza la superposicion
+}
+
+/*
+ * SDL_UnionRect(rectA, rectB, result)
+ * Calcula el rectangulo minimo que contiene a ambos rectangulos.
+ * No indica colision; es util para bounding boxes combinados.
+ */
+SDL_Rect combined;
+SDL_UnionRect(&jugador, &enemigo, &combined);
+// combined contiene a ambos rectangulos
+
+/*
+ * SDL_EnclosePoints(points, count, clip, result)
+ * Calcula el rectangulo minimo que encierra un conjunto de puntos.
+ *
+ *   points: Array de SDL_Point.
+ *   count:  Cantidad de puntos.
+ *   clip:   Rectangulo de recorte (NULL = sin recorte).
+ *   result: Rectangulo resultante.
+ *
+ * Devuelve SDL_TRUE si al menos un punto queda dentro del clip.
+ */
+SDL_Point puntos[] = {{10, 20}, {50, 80}, {30, 10}};
+SDL_Rect bounding;
+SDL_EnclosePoints(puntos, 3, NULL, &bounding);
+// bounding = rectangulo minimo que contiene los 3 puntos
+
+/*
+ * Ejemplo completo: arrastrar un objeto solo si el mouse lo toca
+ *
+ *   SDL_MOUSEBUTTONDOWN:
+ *     1. Obtener posicion del mouse
+ *     2. Verificar si esta dentro del rectangulo del objeto
+ *     3. Si esta dentro, activar arrastre
+ *
+ *   SDL_MOUSEMOTION:
+ *     Si esta arrastrando, mover el objeto con el delta del mouse
+ *
+ *   SDL_MOUSEBUTTONUP:
+ *     Desactivar arrastre
+ */
+SDL_Rect sprite = {200, 150, 64, 64};
+SDL_bool arrastrando = SDL_FALSE;
+
+// En el event loop:
+case SDL_MOUSEBUTTONDOWN: {
+    SDL_Point p = {event.button.x, event.button.y};
+    if (SDL_PointInRect(&p, &sprite))
+        arrastrando = SDL_TRUE;
+    break;
+}
+case SDL_MOUSEMOTION: {
+    if (arrastrando) {
+        sprite.x += event.motion.xrel;
+        sprite.y += event.motion.yrel;
+    }
+    break;
+}
+case SDL_MOUSEBUTTONUP: {
+    arrastrando = SDL_FALSE;
+    break;
+}
 
 /* ============================================================================
  *  CICLO DE VIDA TIPICO

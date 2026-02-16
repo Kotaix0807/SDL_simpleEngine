@@ -5532,6 +5532,7 @@ struct nk_style_window_header {
 
     /* properties */
     enum nk_style_header_align align;
+    nk_flags title_align;
     struct nk_vec2 padding;
     struct nk_vec2 label_padding;
     struct nk_vec2 spacing;
@@ -19136,6 +19137,7 @@ nk_style_from_table(struct nk_context *ctx, const struct nk_color *table)
     win->header.label_normal = table[NK_COLOR_TEXT];
     win->header.label_hover = table[NK_COLOR_TEXT];
     win->header.label_active = table[NK_COLOR_TEXT];
+    win->header.title_align = NK_TEXT_LEFT;
     win->header.label_padding = nk_vec2(4,4);
     win->header.padding = nk_vec2(4,4);
     win->header.spacing = nk_vec2(0,0);
@@ -20212,13 +20214,19 @@ nk_panel_begin(struct nk_context *ctx, const char *title, enum nk_panel_type pan
         float t = font->width(font->userdata, font->height, title, text_len);
         text.padding = nk_vec2(0,0);
 
-        label.x = header.x + style->window.header.padding.x;
-        label.x += style->window.header.label_padding.x;
         label.y = header.y + style->window.header.label_padding.y;
         label.h = font->height + 2 * style->window.header.label_padding.y;
-        label.w = t + 2 * style->window.header.spacing.x;
-        label.w = NK_CLAMP(0, label.w, header.x + header.w - label.x);
-        nk_widget_text(out, label, (const char*)title, text_len, &text, NK_TEXT_LEFT, font);}
+        if (style->window.header.title_align == NK_TEXT_LEFT) {
+            label.x = header.x + style->window.header.padding.x;
+            label.x += style->window.header.label_padding.x;
+            label.w = t + 2 * style->window.header.spacing.x;
+            label.w = NK_CLAMP(0, label.w, header.x + header.w - label.x);
+        } else {
+            label.x = header.x + style->window.header.padding.x;
+            label.w = header.w - 2 * style->window.header.padding.x;
+        }
+        nk_widget_text(out, label, (const char*)title, text_len, &text,
+            style->window.header.title_align, font);}
     }
 
     /* draw window background */

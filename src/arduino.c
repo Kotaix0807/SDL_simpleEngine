@@ -1,16 +1,36 @@
+/**
+ * @file arduino.c
+ * @brief Implementacion de la comunicacion serial con Arduino.
+ *
+ * Gestiona la apertura, configuracion y lectura no bloqueante del
+ * puerto serial para obtener datos del sensor de luz.
+ */
+
+// ============================================================
+// Includes
+// ============================================================
 #include "arduino.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <stdbool.h> // Necesario para usar 'bool' en C
 
+// ============================================================
+// Variables globales
+// ============================================================
 int serial_fd = -1;
 int light_level = 0;
 
 //#define ARDUINO_DEBUG
 
+// ============================================================
+// Funciones publicas
+// ============================================================
+
+/// Abre el puerto serial y lo configura a 9600 baudios, 8N1, modo RAW.
 bool arduinoConnect()
 {
     // 1. Intentamos abrir el puerto (ajusta si es ttyUSB0)
@@ -53,6 +73,7 @@ bool arduinoConnect()
     return true;
 }
 
+/// Cierra el puerto serial y resetea el descriptor a -1.
 void arduinoDisconnect()
 {
     if (serial_fd >= 0) {
@@ -62,9 +83,11 @@ void arduinoDisconnect()
     }
 }
 
+/// Lee bytes disponibles del serial y actualiza el nivel de luz al recibir '\n'.
 void getLightLevel(int *light)
 {
-    if (serial_fd < 0) return;
+    if (serial_fd < 0)
+        return;
 
     static char buffer[10];
     static int index = 0;
@@ -95,27 +118,67 @@ void getLightLevel(int *light)
     }
 }
 
+void getArduinoStatus(char *statusBuffer, int maxLength)
+{
+    if (serial_fd < 0) return;
+
+    static char internalBuffer[64];
+    static int index = 0;
+    char c;
+
+    // Leemos byte a byte lo que llega del puerto serial
+    while (read(serial_fd, &c, 1) > 0) {
+        if (c == '\n' || c == '\r') {
+            if (index > 0) {
+                internalBuffer[index] = '\0';
+                // Copiamos el mensaje al buffer externo
+                strncpy(statusBuffer, internalBuffer, maxLength);
+                index = 0;
+                return; // Retornamos al recibir una línea completa
+            }
+        } else {
+            if (index < (int)sizeof(internalBuffer) - 1) {
+                internalBuffer[index++] = c;
+            }
+        }
+    }
+    // Si no hay línea completa, ponemos el primer caracter en nulo para indicar "nada nuevo"
+    statusBuffer[0] = '\0';
+}
+
 #ifdef ARDUINO_DEBUG
 
 int main()
 {
     if(!arduinoConnect())
         return 1;
-        
-    // Pequeña espera para que el Arduino se reinicie al abrir el puerto (pasa en algunos modelos)
-    usleep(2000000); // 2 segundos
+
+    // Espera a que Arduino se estabilice tras el reset de conexión
+    printf("Esperando a Arduino...\n");
+    //sleep(2); 
+
+    char mensaje[64];
+
+    printf("Escuchando eventos del botón (presiona el botón en el circuito)...\n");
 
     while(1)
     {
-        getLightLevel(&light_level);
-        printf("Nivel de luz: %d\n", light_level);
+        getArduinoStatus(mensaje, 64);
         
-        // Un pequeño sleep para no saturar la consola de Linux, 
-        // aunque el read ya bloquea un poco esperando datos.
-        usleep(100000); // 0.1 segundos
+        // Si el mensaje no está vacío, lo imprimimos
+        if (mensaje[0] != '\0') {
+            printf("[ARDUINO]: %s\n", mensaje);
+
+            // Ejemplo de lógica basada en el texto recibido
+            if (strstr(mensaje, "Fuera!")) {
+                printf("--> ¡Detección de inicio de carrera en C!\n");
+            }
+        }
+
+        //sleep(1); // 10ms para no consumir 100% de CPU
     }
 
-    close(serial_fd);
+    arduinoDisconnect();
     return 0;
 }
 

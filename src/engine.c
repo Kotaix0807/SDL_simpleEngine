@@ -1,7 +1,14 @@
+/**
+ * @file engine.c
+ * @brief Implementacion del motor principal. Ciclo de vida, input, render y framerate.
+ */
+
+// ============================================================
+// Includes
+// ============================================================
 #include "SDL_video.h"
 #include <SDL_mixer.h>
 #include <SDL_image.h>
-#include <stdio.h>
 
 //#define ARDUINO_ON
 
@@ -17,6 +24,11 @@
 #include "debugging.h"
 #include "text.h"
 
+// ============================================================
+// Variables
+// ============================================================
+
+// -- Publicas (accesibles via extern en engine.h) --
 bool INSTANCE = true;
 int last_frame = 0;
 float deltatime = 0.0f;
@@ -34,73 +46,91 @@ int MouseY = 0;
 
 TTF_Font *font = NULL;
 
-Text txtFPS;
-Text txtMouse;
+// ============================================================
+// Funciones publicas - Ciclo de vida
+// ============================================================
 
+// Inicializa SDL, ventana, render, audio, texto y GUI.
+// Orden: config -> SDL -> IMG/Audio -> ventana -> render -> TTF -> Text -> GUI -> Arduino.
 bool Game_Init()
 {
-	//Cargar configuracion.
+	// Cargar configuracion desde archivo .ini
 	if(loadConfig(&config, CONFIG_DIR CFG_FILE) != true)
 		return false;
 
 	Uint32 windowFlags = SDL_WINDOW_RESIZABLE | (config.fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
-	//Iniciar SDL.
-    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+
+	// Iniciar SDL (video)
+	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		printDebug("No se pudo iniciar SDL: %s\n", SDL_GetError());
 		return false;
 	}
-	//Iniciar textura y audio.
+
+	// Iniciar subsistemas de textura y audio
 	initTexture();
-    initAudio();
-	//Si la cantidad de monitores es menor al monitor que apunta el window, entonces el default es 0
+	initAudio();
+
+	// Validar monitor: si no existe el configurado, usar el default (0)
 	if(SDL_GetNumVideoDisplays() < config.defaultMonitor)
 		config.defaultMonitor = 0;
 
-	//Iniciar ventana.
+	// Crear ventana
 	window = SDL_CreateWindow(config.name, SDL_WINDOWPOS_CENTERED_DISPLAY(config.defaultMonitor), SDL_WINDOWPOS_CENTERED_DISPLAY(config.defaultMonitor), config.WIN_W, config.WIN_H, windowFlags);
 	if (!window)
 	{
 		printDebug("No se pudo crear ventana: %s\n", SDL_GetError());
 		return false;
 	}
-	//Iniciar render.
-	render = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+	// Crear renderer con aceleracion por hardware (y vsync si esta habilitado en config)
+	Uint32 renderFlags = SDL_RENDERER_ACCELERATED | (config.vsync ? SDL_RENDERER_PRESENTVSYNC : 0);
+	render = SDL_CreateRenderer(window, -1, renderFlags);
 	if (!render)
 	{
 		printDebug("No se pudo crear render: %s\n", SDL_GetError());
 		return false;
 	}
-	// Establecer resolucion logica para escalado simetrico.
-	SDL_RenderSetLogicalSize(render, config.WIN_W, config.WIN_H);
+
+	// Escala inicial 1:1 (ventana arranca al tamanho configurado)
+	SDL_RenderSetScale(render, 1.0f, 1.0f);
+
+	// Iniciar SDL_ttf
 	if (TTF_Init() == -1)
 	{
 		printDebug("No se pudo iniciar TTF: %s\n", TTF_GetError());
 		return false;
 	}
-	//Iniciar sistema de texto.
-	if (!Text_InitSystem(FONTS_DIR LCD_FONT, 24))
+
+	// Iniciar sistema de texto
+	if (!Text_InitSystem(FONTS_DIR JERSEY_FONT, 24))
 		return false;
-	//Iniciar GUI (Nuklear).
-	if (!GUI_Init(window, render, FONTS_DIR VT_FONT, 30))
+
+	// Iniciar GUI (Nuklear)
+	if (!GUI_Init(window, render, FONTS_DIR JERSEY_FONT, 30))
 	{
 		printDebug("No se pudo iniciar GUI\n");
 		return false;
 	}
+
 	#ifdef ARDUINO_ON
 	if (!arduinoConnect())
 	{
 		printDebug("No se pudo conectar con Arduino (continuando sin el)\n");
 	}
 	#endif
+
 	return true;
 }
 
+// Crea los textos del HUD (FPS, mouse).
 void Game_Setup()
 {
-	txtFPS = Text_Create("FPS: 0", 10, 10);
-	txtMouse = Text_Create("Mouse: 0, 0", 1080, 40);
+	// Setup del juego
 }
+
+// Procesa eventos SDL: cierre, teclas, mouse.
+// Delega a GUI y debugging antes de procesar los propios.
 void Game_KeyboardInput()
 {
 	SDL_Event event;
@@ -108,6 +138,7 @@ void Game_KeyboardInput()
 	while (SDL_PollEvent(&event))
 	{
 		GUI_HandleEvent(&event);
+		keyEventHandlerDebug(event);
 		switch (event.type)
 		{
 			case(SDL_QUIT):
@@ -118,7 +149,6 @@ void Game_KeyboardInput()
 			case(SDL_KEYDOWN):
 			{
 				SDL_Keycode KEY = event.key.keysym.sym;
-				keyEventFrameDebug(KEY);
 
 				if(KEY == SDLK_ESCAPE)
 					INSTANCE = false;
@@ -137,55 +167,64 @@ void Game_KeyboardInput()
 			{
 				break;
 			}
+			case(SDL_WINDOWEVENT):
+			{
+				if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+				{
+					float sx = (float)event.window.data1 / config.WIN_W; // ej: 1920 / 960 = 2.0 <- Escala horizontal del juego
+					float sy = (float)event.window.data2 / config.WIN_H; // Escala vertical del juego
+					SDL_RenderSetScale(render, sx, sy);
+				}
+				break;
+			}
 			default:
 				break;
 		}
 	}
 	GUI_InputEnd();
 }
+
+// Calcula deltatime y espera el tiempo restante para cumplir el framerate objetivo.
 void Game_UpdateFrame()
 {
 	Uint32 actualTime = SDL_GetTicks();
 	deltatime = (actualTime - last_frame) / 1000.0f;
 	last_frame = actualTime;
 
+	SDL_GetMouseState(&MouseX, &MouseY);
+
+	float sx, sy;
+	SDL_RenderGetScale(render, &sx, &sy);
+	MouseX = (int)(MouseX / sx);
+	MouseY = (int)(MouseY / sy);
 
 	int WaitTime = FRAME_TIME_MS(config.fps) - (SDL_GetTicks() - actualTime);
 	if (WaitTime > 0 && WaitTime <= FRAME_TIME_MS(config.fps))
 		SDL_Delay(WaitTime);
 }
 
+// Limpia pantalla, dibuja debug/HUD/GUI y presenta el frame.
 void Game_Render()
 {
 	SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
 	SDL_RenderClear(render);
 
-	SDL_GetMouseState(&MouseX, &MouseY);
-
 	renderFrameDebug();
 
-	// Actualizar textos (solo re-renderiza si cambian)
-	char buffer[64];
-	snprintf(buffer, sizeof(buffer), "FPS: %d", (int)(1.0f / deltatime));
-	Text_Set(&txtFPS, buffer);
+	renderPerfMetrics();
 
-	snprintf(buffer, sizeof(buffer), "Mouse: %d, %d", MouseX, MouseY);
-	Text_Set(&txtMouse, buffer);
-
-	// Dibujar textos (1 linea cada uno)
-	Text_Draw(&txtFPS);
-	Text_Draw(&txtMouse);
+	renderDebugMenu();
 
 	GUI_Render();
 	SDL_RenderPresent(render);
 }
 
+// Libera todos los recursos en orden inverso a la inicializacion.
 void Game_Destroy()
 {
-	Text_Free(&txtFPS);
-	Text_Free(&txtMouse);
 	Text_QuitSystem();
 	exitFrameDebug();
+
 	#ifdef ARDUINO_ON
 	arduinoDisconnect();
 	#endif

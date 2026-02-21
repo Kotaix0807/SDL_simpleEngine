@@ -9,6 +9,17 @@
 #ifndef TOOLS_H
 #define TOOLS_H
 
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <dirent.h>
+#include <stdarg.h>
+#include <SDL.h>
+#include <wchar.h> // Es para la lectura braile
+#include <sys/stat.h> // Sistemas de archivos
 #include <SDL.h>
 
 // ============================================================
@@ -33,9 +44,46 @@
  */
 typedef enum
 {
-    IMAGE = 0, /**< @brief Recurso de tipo imagen. */
-    SOUND      /**< @brief Recurso de tipo sonido. */
-}valid_type;
+    IMAGE = 0, /** @brief Recurso de tipo imagen. */
+    SOUND      /** @brief Recurso de tipo sonido. */
+} valid_type;
+
+/**
+ * @brief Formato para mostrar la fecha.
+ */
+typedef enum
+{
+    DATE = 0, /** @brief Muestra solo la fecha.*/
+    HOURS,    /** @brief Muestra solo las horas del dia.*/
+    ALL,      /** @brief Muestra la fecha actual completa.*/
+
+    YEAR,     /** @brief Muestra solo el anho.*/
+    MONTH,    /** @brief Muestra solo el mes.*/
+    DAY,      /** @brief Muestra solo el dia.*/
+
+    HOUR,     /** @brief Muestra solo la hora del dia.*/
+    MINUTE,   /** @brief Muestra solo los minutos del dia.*/
+    SECONDS,  /** @brief Muestra solo los segundos del dia.*/
+} timeMesureUnit;
+
+/**
+ * @brief Elegir el separador para mostrar la fecha
+ */
+typedef enum
+{
+    SLASH = 2, /** @brief Muestra la fecha con el separador '/'*/
+    DASH = 0,      /** @brief Muestra la fecha con el separador '-'.*/
+} dateSeparator;
+
+/**
+ * @brief Formato para mostrar la fecha.
+ */
+typedef enum
+{
+    USA = 0, /** @brief Muestra la fecha en formato USA*/
+    EU,      /** @brief Muestra la fecha en formato EU.*/
+    ISO      /** @brief Muestra la fecha en formato ISO.*/
+} dateRegion;
 
 // ============================================================
 // Algoritmos
@@ -55,6 +103,14 @@ int recBinarySearch(int arr[], int left, int right, int key);
 // ============================================================
 // Sistema de archivos
 // ============================================================
+
+/**
+ * @brief Verifica si existe un directorio.
+ *
+ * @param path Ruta del directorio.
+ * @return Si existe, verdadero, del contrario, falso.
+ */
+bool DirExists(const char *path);
 
 /**
  * @brief Cuenta la cantidad de archivos en un directorio.
@@ -209,5 +265,37 @@ unsigned long fileLines(const char *file, int opt);
 char **readText(const char *file);
 
 int centerI(int a, int b);
+
+// ============================================================
+// Metricas de sistema
+// ============================================================
+
+/**
+ * @brief Calcula el porcentaje de uso de CPU del proceso.
+ *
+ * Lee utime y stime de /proc/self/stat y compara el delta de
+ * tiempo de CPU contra el delta de tiempo real (wall clock).
+ *
+ * @return Porcentaje de CPU (0-100+), o -1.0f en caso de error.
+ */
+float getCpuUsage(void);
+
+/**
+ * @brief Obtiene el uso de memoria anonima (RssAnon) del proceso.
+ *
+ * Lee el campo RssAnon de /proc/self/status y lo convierte a MB.
+ *
+ * @return Memoria en MB, o -1 en caso de error.
+ */
+long getMemoryUsageMB(void);
+
+/**
+ * @brief Obtiene la fecha actual
+ *
+ * Formato: Anho-mes-dia hora-minutos-segundos
+ *
+ * @return Devuelve un string con la fecha actual
+ */
+char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region);
 
 #endif

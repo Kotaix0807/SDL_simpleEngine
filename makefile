@@ -2,9 +2,9 @@ CC      = gcc
 CFLAGS_BASE = -Wall -Wextra -Wpedantic -std=c11 -Iinclude
 SANITIZERS ?=
 LSAN_SUPP  = lsan.supp
-CFLAGS  = $(CFLAGS_BASE) $(SANITIZERS) `sdl2-config --cflags` -Ilib
+CFLAGS  = $(CFLAGS_BASE) $(SANITIZERS) `sdl2-config --cflags` `pkg-config --cflags gtk+-3.0` -Ilib
 LDFLAGS = $(SANITIZERS)
-LDLIBS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lm
+LDLIBS = `sdl2-config --libs` `pkg-config --libs gtk+-3.0` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lm
 
 SRC_DIR   = src
 BUILD_DIR = build
@@ -16,6 +16,11 @@ HEADERS = $(wildcard $(INC_DIR)/*.h)
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(notdir $(SRCS)))
 
 TARGET = $(BUILD_DIR)/game
+
+# Limpia variables de entorno de snap/VSCode que interfieren con GTK del sistema
+CLEAN_GTK = env -u GTK_PATH -u GTK_EXE_PREFIX -u GTK_IM_MODULE_FILE \
+	-u GDK_PIXBUF_MODULEDIR -u GDK_PIXBUF_MODULE_FILE \
+	-u GIO_MODULE_DIR -u GSETTINGS_SCHEMA_DIR -u LOCPATH
 
 VALGRIND_FLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes
 VALGRIND = valgrind $(VALGRIND_FLAGS)
@@ -40,17 +45,17 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 run: all
-	clear && $(TARGET)
+	clear && $(CLEAN_GTK) $(TARGET)
 
 sanitize:
 	@$(MAKE) clean
 	@$(MAKE) SANITIZERS="-fsanitize=address,undefined" all
-	ASAN_OPTIONS=quarantine_size_mb=64 LSAN_OPTIONS=suppressions=$(LSAN_SUPP) $(TARGET)
+	$(CLEAN_GTK) env ASAN_OPTIONS=quarantine_size_mb=64 LSAN_OPTIONS=suppressions=$(LSAN_SUPP) $(TARGET)
 
 leaks:
 	@$(MAKE) clean
 	@$(MAKE) SANITIZERS= LDFLAGS= all
-	$(VALGRIND_FREE) $(TARGET)
+	$(CLEAN_GTK) $(VALGRIND_FREE) $(TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -71,7 +76,7 @@ endif
 	$(CC) $(CFLAGS) -DTEST_MAIN $(SRC_DIR)/$(FILE).c $(filter-out $(SRC_DIR)/$(FILE).c,$(wildcard $(SRC_DIR)/*.c)) -o $(BUILD_DIR)/test_$(FILE) $(LDLIBS)
 	@echo "=== Ejecutando test_$(FILE) ==="
 	@echo ""
-	@$(BUILD_DIR)/test_$(FILE)
+	@$(CLEAN_GTK) $(BUILD_DIR)/test_$(FILE)
 
 # Profiling con valgrind + kcachegrind
 # Uso: make debug
@@ -79,7 +84,7 @@ debug:
 	@$(MAKE) clean
 	@$(MAKE) SANITIZERS= LDFLAGS= CFLAGS_BASE="$(CFLAGS_BASE) -g -O2" all
 	@echo "=== Ejecutando profiling con callgrind ==="
-	valgrind --tool=callgrind --callgrind-out-file=$(BUILD_DIR)/callgrind.out $(TARGET)
+	$(CLEAN_GTK) valgrind --tool=callgrind --callgrind-out-file=$(BUILD_DIR)/callgrind.out $(TARGET)
 	@echo ""
 	@echo "=== Abriendo kcachegrind ==="
 	kcachegrind $(BUILD_DIR)/callgrind.out &

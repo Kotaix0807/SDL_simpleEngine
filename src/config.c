@@ -100,7 +100,7 @@ void printConfig(GameConfig *cfg)
 {
     if(!cfg)
     {
-        printDebug("No se pudo leer el archivo de configuracion, no esta, no existe, o esta corrupto\n");
+        printDebug("No se pudo leer el archivo de configuracion, no se encuentra, no existe, o esta corrupto\n");
         return;
     }
     printf("[Video]\n");

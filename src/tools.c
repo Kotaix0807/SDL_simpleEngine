@@ -12,18 +12,12 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <stdio.h>
-#include <dirent.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <SDL.h>
-#include <wchar.h>
-
 #include "config.h"
 #include "tools.h"
 
-//#define TOOLS_DEBUG
+// #define TOOLS_DEBUG
+
+static FILE *logFile = NULL;
 
 // ============================================================
 // Algoritmos
@@ -50,6 +44,16 @@ int recBinarySearch(int arr[], int left, int right, int key)
 // ============================================================
 // Sistema de archivos
 // ============================================================
+
+/** @brief Verifica si un directorio existe. */
+bool DirExists(const char *path)
+{
+    struct stat stats;
+    stat(path, &stats);
+    if (S_ISDIR(stats.st_mode))
+        return true;
+    return false;
+}
 
 /** @brief Cuenta la cantidad de archivos en un directorio. */
 int filesInDir(char *path)
@@ -395,13 +399,226 @@ int centerI(int a, int b)
     return abs((a - b)) / 2;
 }
 
+// ============================================================
+// Metricas de sistema
+// ============================================================
+
+float getCpuUsage(void)
+{
+    static unsigned long prev_utime = 0, prev_stime = 0;
+    static Uint32 prev_ticks = 0;
+
+    FILE *f = fopen("/proc/self/stat", "r");
+    if (!f)
+        return -1.0f;
+
+    char buf[512];
+    if (!fgets(buf, sizeof(buf), f))
+    {
+        fclose(f);
+        return -1.0f;
+    }
+    fclose(f);
+
+    // El campo "comm" puede contener espacios, buscar el ultimo ')'
+    char *p = strrchr(buf, ')');
+    if (!p)
+        return -1.0f;
+
+    p += 2;
+
+    // Saltar 11 campos (state..cmajflt) para llegar a utime(14) y stime(15)
+    unsigned long dummy, utime, stime;
+    char state;
+    sscanf(p, "%c %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu",
+           &state, &dummy, &dummy, &dummy, &dummy, &dummy, &dummy,
+           &dummy, &dummy, &dummy, &dummy, &utime, &stime);
+
+    Uint32 now = SDL_GetTicks();
+    float cpu  = 0.0f;
+
+    if (prev_ticks > 0)
+    {
+        unsigned long delta_cpu  = (utime + stime) - (prev_utime + prev_stime);
+        float         delta_wall = (now - prev_ticks) / 1000.0f;
+        long          ticks_sec  = sysconf(_SC_CLK_TCK);
+
+        if (delta_wall > 0)
+            cpu = ((float)delta_cpu / ticks_sec) / delta_wall * 100.0f;
+    }
+
+    prev_utime = utime;
+    prev_stime = stime;
+    prev_ticks = now;
+
+    return cpu;
+}
+
+long getMemoryUsageMB(void)
+{
+    FILE *f = fopen("/proc/self/status", "r");
+    if (!f)
+        return -1;
+
+    char line[128];
+    while (fgets(line, sizeof(line), f))
+    {
+        long val;
+        if (sscanf(line, "RssAnon: %ld", &val) == 1)
+        {
+            fclose(f);
+            return val / 1024;
+        }
+    }
+
+    fclose(f);
+    return -1;
+}
+
+char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
+{
+    static char date[64];
+    char sep;
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+
+    
+    if(separator != SLASH && separator != DASH)
+    {
+        printDebug("Error, no se especifico un separador de tiempo valido\n");
+        return NULL;
+    }
+
+    sep = 45 + separator;
+
+    if(region == ISO)
+    {
+        snprintf(date, sizeof(date), "%04d-%02d-%02d %02d:%02d:%02d",
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                tm.tm_hour, tm.tm_min, tm.tm_sec);
+        return date;
+    }
+
+    switch(unit)
+    {
+        case DATE:
+            switch(region)
+            {
+                case EU:
+                    snprintf(date, sizeof(date), "%02d%c%02d%c%04d",
+                            tm.tm_mday, sep, tm.tm_mon + 1, sep, tm.tm_year + 1900);
+                    break;
+                case USA:
+                    snprintf(date, sizeof(date), "%02d%c%02d%c%04d",
+                            tm.tm_mon + 1, sep, tm.tm_mday, sep, tm.tm_year + 1900);
+                    break;
+                default:
+                    printDebug("Error, no se especifico un formato regional del tiempo valida.\n");
+                    return NULL;
+                    break;
+            }
+            break;
+        case HOURS:
+            snprintf(date, sizeof(date), "%02d:%02d:%02d",
+                    tm.tm_hour, tm.tm_min, tm.tm_sec);
+            break;
+        case ALL:
+            switch(region)
+            {
+                case EU:
+                    snprintf(date, sizeof(date), "%02d%c%02d%c%04d %02d:%02d:%02d",
+                            tm.tm_mday, sep, tm.tm_mon + 1, sep, tm.tm_year + 1900,
+                            tm.tm_hour, tm.tm_min, tm.tm_sec);
+                    break;
+                case USA:
+                    snprintf(date, sizeof(date), "%02d%c%02d%c%04d %02d:%02d:%02d",
+                            tm.tm_mon + 1, sep, tm.tm_mday, sep, tm.tm_year + 1900,
+                            tm.tm_hour, tm.tm_min, tm.tm_sec);
+                    break;
+                default:
+                    printDebug("Error, no se especifico un formato regional del tiempo valida.\n");
+                    return NULL;
+                    break;
+            }
+            break;
+        case YEAR:
+            snprintf(date, sizeof(date), "%04d", tm.tm_year + 1900);
+            break;
+        case MONTH:
+            snprintf(date, sizeof(date), "%02d", tm.tm_mon + 1);
+            break;
+        case DAY:
+            snprintf(date, sizeof(date), "%02d", tm.tm_mday);
+            break;
+        case HOUR:
+            snprintf(date, sizeof(date), "%02d", tm.tm_hour);
+            break;
+        case MINUTE:
+            snprintf(date, sizeof(date), "%02d", tm.tm_min);
+            break;
+        case SECONDS:
+            snprintf(date, sizeof(date), "%02d", tm.tm_sec);
+            break;
+        default:
+            printDebug("Error, no se especifico una unidad de medida de tiempo valida.\n");
+            return NULL;
+            break;
+    }
+    return date;
+}
+
+void initLog()
+{
+    
+    logFile = fopen("log/", "a");
+
+
+}
+
 #ifdef TOOLS_DEBUG
 
-GameConfig config = {0};  // Definición temporal para el test
-int main()
+#include <gtk/gtk.h>
+
+void on_button_click(GtkWidget *button, gpointer data)
 {
-    config.debug_mode = true;
-    printError("Error: %d, %d\n", 5, 3);
+    (void)button;
+    const char *mensaje = (const char *)data;
+    g_print("Botón clickeado: %s\n", mensaje);
+}
+
+int main(int argc, char *argv[])
+{
+    gtk_init(&argc, &argv);
+
+    /* Ventana */
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "GTK Demo");
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    /* Layout vertical */
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox), 20);
+    gtk_container_add(GTK_CONTAINER(window), vbox);
+
+    /* Label */
+    GtkWidget *label = gtk_label_new("Hola GTK!");
+    gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
+
+    /* Entry */
+    GtkWidget *entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Escribí tu nombre");
+    gtk_box_pack_start(GTK_BOX(vbox), entry, FALSE, FALSE, 0);
+
+    /* Botón */
+    GtkWidget *button = gtk_button_new_with_label("Saludar");
+    gtk_box_pack_start(GTK_BOX(vbox), button, FALSE, FALSE, 0);
+    g_signal_connect(button, "clicked", G_CALLBACK(on_button_click), entry);
+
+    /* Mostrar y correr */
+    gtk_widget_show_all(window);
+    gtk_main();
+
     return 0;
 }
 

@@ -112,7 +112,7 @@ bool Game_Init()
 		printDebug("No se pudo iniciar GUI\n");
 		return false;
 	}
-
+	
 	#ifdef ARDUINO_ON
 	if (!arduinoConnect())
 	{
@@ -138,7 +138,7 @@ void Game_KeyboardInput()
 	while (SDL_PollEvent(&event))
 	{
 		GUI_HandleEvent(&event);
-		keyEventHandlerDebug(event);
+		handleDebugEvent(event);
 		switch (event.type)
 		{
 			case(SDL_QUIT):
@@ -209,12 +209,8 @@ void Game_Render()
 	SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
 	SDL_RenderClear(render);
 
-	renderFrameDebug();
 
-	renderPerfMetrics();
-
-	renderDebugMenu();
-
+	renderDebug();
 	GUI_Render();
 	SDL_RenderPresent(render);
 }

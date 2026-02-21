@@ -1,11 +1,10 @@
 # TODO
 
 ## MENU DEBUG
-- [ ] Pre-visualizar FONTS
-- [ ] Crear el "Menu-Debug" (Botones para elegir: PerfMetrics - frameDebug - fontDebug, etc)
+- [ ] Pre-visualizar FONTS.
+- [ ] LogFiles.
 
 ## OTROS
-- [ ] Optimización
-- [ ] Investigar un poco sobre nuklear
 
 ## SPRITES
+- [ ] Construir la libreria sprites.

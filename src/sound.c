@@ -55,13 +55,13 @@ bool initAudio(void)
     {
         if (SDL_Init(SDL_INIT_AUDIO) < 0)
         {
-            printDebug("Error SDL_Init: %s\n", SDL_GetError());
+            printDebug(LOG_ERROR, "Error SDL_Init: %s\n", SDL_GetError());
             return false;
         }
     }
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
     {
-        printDebug("Error Mix_OpenAudio: %s\n", Mix_GetError());
+        printDebug(LOG_ERROR, "Error Mix_OpenAudio: %s\n", Mix_GetError());
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
         return false;
     }
@@ -85,7 +85,7 @@ void playAndFreeSfx(const char *sound)
 {
     if (!initAudio())
     {
-        printDebug("Olvidaste iniciar el audio! o no esta activo...: %s\n", Mix_GetError());
+        printDebug(LOG_WARN, "Olvidaste iniciar el audio! o no esta activo...: %s\n", Mix_GetError());
         return;
     }
 
@@ -94,7 +94,7 @@ void playAndFreeSfx(const char *sound)
 
     Mix_Chunk *sfx_chunk = Mix_LoadWAV(path);
     if(!sfx_chunk) {
-        printDebug("Error al cargar %s: %s\n", path, Mix_GetError());
+        printDebug(LOG_ERROR, "Error al cargar %s: %s\n", path, Mix_GetError());
         return;
     }
 
@@ -102,7 +102,7 @@ void playAndFreeSfx(const char *sound)
 
     int channel = Mix_PlayChannel(-1, sfx_chunk, 0);
     if (channel == -1) {
-        printDebug("Error al reproducir %s: %s\n", path, Mix_GetError());
+        printDebug(LOG_ERROR, "Error al reproducir %s: %s\n", path, Mix_GetError());
         Mix_FreeChunk(sfx_chunk);
         return;
     }
@@ -126,13 +126,13 @@ sfx *initSfxLib(char *path)
     char **sounds = getFilesFromDir(path, &sfx_count, audioExtensions, ARRAY_L(audioExtensions), SOUND);
     if(!sounds)
     {
-        printDebug("No se pudo inicializar la libreria sfx en la carpeta '%s'\n", path);
+        printDebug(LOG_ERROR, "No se pudo inicializar la libreria sfx en la carpeta '%s'\n", path);
         return NULL;
     }
 
     if(sfx_count <= 0)
     {
-        printDebug("No se encontraron archivos de audio en '%s'\n", path);
+        printDebug(LOG_WARN, "No se encontraron archivos de audio en '%s'\n", path);
         freeStringArray(sounds, sfx_count);
         return NULL;
     }
@@ -156,7 +156,7 @@ sfx *initSfxLib(char *path)
         snprintf(fullpath, sizeof(fullpath), "%s%s", SFX_DIR, sounds[i]);
         cur->chunks[i] = Mix_LoadWAV(fullpath);
         if(!cur->chunks[i])
-            printDebug("Error al cargar %s: %s\n", fullpath, Mix_GetError());
+            printDebug(LOG_WARN, "Error al cargar %s: %s\n", fullpath, Mix_GetError());
         if (sounds[i])
             free(sounds[i]);
     }
@@ -173,13 +173,13 @@ music *initMusicLib(char *path)
 
     if(!songs)
     {
-        printDebug("No se pudo inicializar la libreria de musica en la carpeta '%s'\n", path);
+        printDebug(LOG_ERROR, "No se pudo inicializar la libreria de musica en la carpeta '%s'\n", path);
         return NULL;
     }
 
     if(music_count <= 0)
     {
-        printDebug("No se encontraron archivos de audio en '%s'\n", path);
+        printDebug(LOG_WARN, "No se encontraron archivos de audio en '%s'\n", path);
         freeStringArray(songs, music_count);
         return NULL;
     }
@@ -203,7 +203,7 @@ music *initMusicLib(char *path)
             snprintf(fullpath, sizeof(fullpath), "%s%s", MUSIC_DIR, songs[i]);
             cur->music[i] = Mix_LoadMUS(fullpath);
             if(!cur->music[i])
-                printDebug("Error al cargar %s: %s\n", fullpath, Mix_GetError());
+                printDebug(LOG_WARN, "Error al cargar %s: %s\n", fullpath, Mix_GetError());
             if(songs[i])
                 free(songs[i]);
         }

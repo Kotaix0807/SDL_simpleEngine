@@ -38,7 +38,7 @@ bool Text_InitSystem(const char *fontPath, int defaultSize)
     defaultFont = TTF_OpenFont(fontPath, defaultSize);
     if (!defaultFont)
     {
-        printDebug("No se pudo cargar fuente: %s\n", TTF_GetError());
+        printDebug(LOG_ERROR, "No se pudo cargar fuente: %s\n", TTF_GetError());
         return false;
     }
     return true;

@@ -29,7 +29,7 @@ bool initTexture(void)
 {
     if (IMG_Init(IMG_INIT_PNG) == 0)
 	{
-		printDebug("No se pudo iniciar IMG: %s\n", SDL_GetError());
+		printDebug(LOG_ERROR, "No se pudo iniciar IMG: %s\n", SDL_GetError());
 		return false;
 	}
     return true;
@@ -56,7 +56,7 @@ texture initTextureLib(char *path)
 	char **textures_array = getFilesFromDir(path, &n, imageExtensions, ARRAY_L(imageExtensions), IMAGE);
 	if(!textures_array || n <= 0)
 	{
-		printDebug("No se pudo crear la libreria de texturas en '%s'\n", path);
+		printDebug(LOG_ERROR, "No se pudo crear la libreria de texturas en '%s'\n", path);
 		return current;
 	}
 
@@ -64,13 +64,13 @@ texture initTextureLib(char *path)
 	current.rects = malloc(n * sizeof(SDL_Rect *));
 	if(!current.textures_array)
 	{
-		printDebug("No se pudo asignar memoria para texturas\n");
+		printDebug(LOG_WARN, "No se pudo asignar memoria para texturas\n");
 		freeStringArray(textures_array, n);
 		return current;
 	}
 	if(!current.rects)
 	{
-		printDebug("No se pudo asignar memoria para rectangulos\n");
+		printDebug(LOG_WARN, "No se pudo asignar memoria para rectangulos\n");
 		freeStringArray(textures_array, n);
 		return current;
 	}
@@ -84,7 +84,7 @@ texture initTextureLib(char *path)
 		SDL_Surface *srf = IMG_Load(image_path);
 		if(!srf)
 		{
-			printDebug("No se pudo cargar la imagen '%s'\n", textures_array[i]);
+			printDebug(LOG_WARN, "No se pudo cargar la imagen '%s'\n", textures_array[i]);
 			freeTextureLib(&current);
 			break;
 		}
@@ -92,7 +92,7 @@ texture initTextureLib(char *path)
 		current.rects[i] = malloc(sizeof(SDL_Rect));
 		if(!current.rects[i])
 		{
-			printDebug("No se pudo asignar memoria para el rectangulo %d\n", i);
+			printDebug(LOG_WARN, "No se pudo asignar memoria para el rectangulo %d\n", i);
 			SDL_FreeSurface(srf);
 			freeTextureLib(&current);
 			break;
@@ -133,13 +133,13 @@ void assignRectToTexture(SDL_Texture *texture, SDL_Rect *rect)
 	int w = 0, h = 0;
 	if(!rect || !texture)
 	{
-		printDebug("Error asignando tamanho al rectangulo\n");
+		printDebug(LOG_WARN, "Error asignando tamanho al rectangulo\n");
 		return;
 	}
 	GetTextureSize(texture, &w, &h);
 	if(w <= 0 || h <= 0)
 	{
-		printDebug("Error, el tamanho del rectangulo a asignar no es valido\n");
+		printDebug(LOG_WARN, "Error, el tamanho del rectangulo a asignar no es valido\n");
 		return;
 	}
 	rect->x = 0;
@@ -158,7 +158,7 @@ void drawImageF(float x, float y, float w, float h, SDL_Texture *texture)
 {
 	if(!texture)
 	{
-		printDebug("Error, no se pudo dibujar la textura\n");
+		printDebug(LOG_ERROR, "Error, no se pudo dibujar la textura\n");
 		return;
 	}
 	int w_, h_;
@@ -188,7 +188,7 @@ void drawImage(int x, int y, int w, int h, SDL_Texture *texture)
 {
 	if(!texture)
 	{
-		printDebug("Error, no se pudo dibujar la textura\n");
+		printDebug(LOG_ERROR, "Error, no se pudo dibujar la textura\n");
 		return;
 	}
 	int w_, h_;

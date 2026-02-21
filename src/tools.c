@@ -10,12 +10,11 @@
 // Includes
 // ============================================================
 
+#include <stdio.h>
 #define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
 #include "tools.h"
-
-// #define TOOLS_DEBUG
 
 static FILE *logFile = NULL;
 
@@ -62,7 +61,7 @@ int filesInDir(char *path)
     struct dirent *de;
     if (dr == NULL)
     {
-        printDebug("No se pudo abirir '%s'\n", path);
+        printDebug(LOG_ERROR, "No se pudo abirir '%s'\n", path);
         return -1;
     }
 
@@ -95,7 +94,7 @@ static int hasValidExtension(const char *filename, const char **extensions, int 
         if (strcmp(ext, extensions[i]) == 0)
             return 1;
     }
-    printDebug("El archivo '%s' no es %s\n", filename, typeAdmited(type));
+    printDebug(LOG_WARN, "El archivo '%s' no es %s\n", filename, typeAdmited(type));
     return 0;
 }
 
@@ -106,7 +105,7 @@ char **getFilesFromDir(char *path, int *outCount, const char **extensions, int e
     struct dirent *de;
     if (dr == NULL)
     {
-        printDebug("No se pudo abrir '%s'\n", path);
+        printDebug(LOG_ERROR, "No se pudo abrir '%s'\n", path);
         if (outCount)
             *outCount = 0;
         return NULL;
@@ -117,7 +116,7 @@ char **getFilesFromDir(char *path, int *outCount, const char **extensions, int e
     char **fileArray = malloc(sizeof(char *) * capacity);
     if (fileArray == NULL)
     {
-        printDebug("Error al asignar memoria\n");
+        printDebug(LOG_ERROR, "Error al asignar memoria\n");
         closedir(dr);
         if (outCount)
             *outCount = 0;
@@ -135,7 +134,7 @@ char **getFilesFromDir(char *path, int *outCount, const char **extensions, int e
                 char **tmp = realloc(fileArray, sizeof(char *) * capacity);
                 if (tmp == NULL)
                 {
-                    printDebug("Error al reasignar memoria\n");
+                    printDebug(LOG_ERROR, "Error al reasignar memoria\n");
                     freeStringArray(fileArray, count);
                     closedir(dr);
                     if (outCount)
@@ -148,7 +147,7 @@ char **getFilesFromDir(char *path, int *outCount, const char **extensions, int e
             fileArray[count] = strdup(de->d_name);
             if (fileArray[count] == NULL)
             {
-                printDebug("Error al copiar nombre de archivo\n");
+                printDebug(LOG_ERROR, "Error al copiar nombre de archivo\n");
                 for (int i = 0; i < count; i++)
                     free(fileArray[i]);
                 free(fileArray);
@@ -184,16 +183,29 @@ void freeStringArray(char **array, int n)
 // ============================================================
 
 /** @brief Imprime texto en stderr solo si el modo debug esta activado. */
-void printDebug(char *error, ...)
+void printDebug(logLevel level, char *error, ...)
 {
-    if(config.debug_mode)
+    if (!config.debug_mode)
+        return;
+
+    static const char *log_level_str[] = {"INFO", "WARN", "ERROR"};
+    
+    va_list args;
+
+    va_start(args, error);
+    vfprintf(stderr, error, args);
+    va_end(args);
+
+    if (logFile)
     {
-        va_list args;
+        fprintf(logFile, "[%s] [%-5s]", get_date(ALL, DASH, ISO), log_level_str[level]);
         va_start(args, error);
-        vfprintf(stderr, error, args);
+        vfprintf(logFile, error, args);
         va_end(args);
+        fflush(logFile);
     }
 }
+
 
 /** @brief Devuelve un string legible del tipo de recurso admitido. */
 char *typeAdmited(valid_type type)
@@ -475,7 +487,7 @@ long getMemoryUsageMB(void)
     return -1;
 }
 
-char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
+char *get_date(timeMesureUnit unit, dateSeparator separator, dateFormat region)
 {
     static char date[64];
     char sep;
@@ -485,7 +497,7 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
     
     if(separator != SLASH && separator != DASH)
     {
-        printDebug("Error, no se especifico un separador de tiempo valido\n");
+        printDebug(LOG_ERROR, "Error, no se especifico un separador de tiempo valido\n");
         return NULL;
     }
 
@@ -494,6 +506,13 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
     if(region == ISO)
     {
         snprintf(date, sizeof(date), "%04d-%02d-%02d %02d:%02d:%02d",
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                tm.tm_hour, tm.tm_min, tm.tm_sec);
+        return date;
+    }
+    if(region == ISO_DEBUG)
+    {
+        snprintf(date, sizeof(date), "%04d-%02d-%02d_%02d-%02d-%02d",
                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                 tm.tm_hour, tm.tm_min, tm.tm_sec);
         return date;
@@ -513,7 +532,7 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
                             tm.tm_mon + 1, sep, tm.tm_mday, sep, tm.tm_year + 1900);
                     break;
                 default:
-                    printDebug("Error, no se especifico un formato regional del tiempo valida.\n");
+                    printDebug(LOG_ERROR, "Error, no se especifico un formato regional del tiempo valida.\n");
                     return NULL;
                     break;
             }
@@ -536,7 +555,7 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
                             tm.tm_hour, tm.tm_min, tm.tm_sec);
                     break;
                 default:
-                    printDebug("Error, no se especifico un formato regional del tiempo valida.\n");
+                    printDebug(LOG_ERROR, "Error, no se especifico un formato regional del tiempo valida.\n");
                     return NULL;
                     break;
             }
@@ -560,7 +579,7 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
             snprintf(date, sizeof(date), "%02d", tm.tm_sec);
             break;
         default:
-            printDebug("Error, no se especifico una unidad de medida de tiempo valida.\n");
+            printDebug(LOG_ERROR, "Error, no se especifico una unidad de medida de tiempo valida.\n");
             return NULL;
             break;
     }
@@ -569,55 +588,37 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region)
 
 void initLog()
 {
-    
-    logFile = fopen("log/", "a");
+    if(!DirExists(LOGS_DIR))
+        mkdir(LOGS_DIR, 0755);
 
-
+    char logFileName[128];
+    snprintf(logFileName, sizeof(logFileName), "%slog_%s.log", LOGS_DIR, get_date(0, 0, ISO_DEBUG));
+    logFile = fopen(logFileName, "a");
+    if(!logFile)
+        printDebug(LOG_ERROR, "Error, no se pudo crear el archivo log...\n");
 }
+
+void closeLog()
+{
+    if(logFile)
+    {
+        fclose(logFile);
+        logFile = NULL;
+    }
+    else
+        return;
+}
+
+#define TOOLS_DEBUG
 
 #ifdef TOOLS_DEBUG
 
-#include <gtk/gtk.h>
-
-void on_button_click(GtkWidget *button, gpointer data)
+int main()
 {
-    (void)button;
-    const char *mensaje = (const char *)data;
-    g_print("Botón clickeado: %s\n", mensaje);
-}
-
-int main(int argc, char *argv[])
-{
-    gtk_init(&argc, &argv);
-
-    /* Ventana */
-    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "GTK Demo");
-    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
-
-    /* Layout vertical */
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox), 20);
-    gtk_container_add(GTK_CONTAINER(window), vbox);
-
-    /* Label */
-    GtkWidget *label = gtk_label_new("Hola GTK!");
-    gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
-
-    /* Entry */
-    GtkWidget *entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Escribí tu nombre");
-    gtk_box_pack_start(GTK_BOX(vbox), entry, FALSE, FALSE, 0);
-
-    /* Botón */
-    GtkWidget *button = gtk_button_new_with_label("Saludar");
-    gtk_box_pack_start(GTK_BOX(vbox), button, FALSE, FALSE, 0);
-    g_signal_connect(button, "clicked", G_CALLBACK(on_button_click), entry);
-
-    /* Mostrar y correr */
-    gtk_widget_show_all(window);
-    gtk_main();
+    config.debug_mode = true;
+    initLog();
+    printDebug(LOG_INFO, "Hola log file del %s!\n", get_date(ALL, DASH, ISO));
+    closeLog();
 
     return 0;
 }

@@ -72,7 +72,7 @@ typedef enum
 typedef enum
 {
     SLASH = 2, /** @brief Muestra la fecha con el separador '/'*/
-    DASH = 0,      /** @brief Muestra la fecha con el separador '-'.*/
+    DASH = 0,  /** @brief Muestra la fecha con el separador '-'.*/
 } dateSeparator;
 
 /**
@@ -82,8 +82,19 @@ typedef enum
 {
     USA = 0, /** @brief Muestra la fecha en formato USA*/
     EU,      /** @brief Muestra la fecha en formato EU.*/
-    ISO      /** @brief Muestra la fecha en formato ISO.*/
-} dateRegion;
+    ISO,     /** @brief Muestra la fecha en formato ISO.*/
+    ISO_DEBUG/** @brief Muestra la fecha en formato ISO para debug.*/
+} dateFormat;
+
+/**
+ * @brief Niveles de logs.
+ */
+typedef enum
+{
+    LOG_INFO = 0, /** @brief Log de tipo info.*/
+    LOG_WARN,     /** @brief Log de tipo advertencia.*/
+    LOG_ERROR     /** @brief Log de tipo error.*/
+} logLevel;
 
 // ============================================================
 // Algoritmos
@@ -151,7 +162,7 @@ void freeStringArray(char **array, int n);
  * @param error Formato de texto estilo printf.
  * @param ...   Argumentos variables del formato.
  */
-void printDebug(char *error, ...);
+void printDebug(logLevel level, char *error, ...);
 
 /**
  * @brief Devuelve un string legible del tipo de recurso admitido.
@@ -296,6 +307,23 @@ long getMemoryUsageMB(void);
  *
  * @return Devuelve un string con la fecha actual
  */
-char *get_date(timeMesureUnit unit, dateSeparator separator, dateRegion region);
+char *get_date(timeMesureUnit unit, dateSeparator separator, dateFormat region);
+
+// ============================================================
+// Log
+// ============================================================
+
+/**
+ * @brief Inicializa el sistema de log.
+ *
+ * Crea el directorio de logs si no existe y abre un archivo
+ * con la fecha actual en el nombre.
+ */
+void initLog(void);
+
+/**
+ * @brief Cierra el archivo de log.
+ */
+void closeLog(void);
 
 #endif

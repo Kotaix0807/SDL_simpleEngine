@@ -45,6 +45,9 @@
 /** @brief Directorio de fuentes tipograficas. */
 #define FONTS_DIR ASSETS_DIR "fonts/"
 
+/** @brief Directorio de logs. */
+#define LOGS_DIR "logs/"
+
 // ============================================================
 // Archivos de configuracion
 // ============================================================

@@ -63,7 +63,7 @@ bool Game_Init()
 	// Iniciar SDL (video)
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
-		printDebug("No se pudo iniciar SDL: %s\n", SDL_GetError());
+		printDebug(LOG_ERROR, "No se pudo iniciar SDL: %s\n", SDL_GetError());
 		return false;
 	}
 
@@ -79,7 +79,7 @@ bool Game_Init()
 	window = SDL_CreateWindow(config.name, SDL_WINDOWPOS_CENTERED_DISPLAY(config.defaultMonitor), SDL_WINDOWPOS_CENTERED_DISPLAY(config.defaultMonitor), config.WIN_W, config.WIN_H, windowFlags);
 	if (!window)
 	{
-		printDebug("No se pudo crear ventana: %s\n", SDL_GetError());
+		printDebug(LOG_ERROR, "No se pudo crear ventana: %s\n", SDL_GetError());
 		return false;
 	}
 
@@ -88,7 +88,7 @@ bool Game_Init()
 	render = SDL_CreateRenderer(window, -1, renderFlags);
 	if (!render)
 	{
-		printDebug("No se pudo crear render: %s\n", SDL_GetError());
+		printDebug(LOG_ERROR, "No se pudo crear render: %s\n", SDL_GetError());
 		return false;
 	}
 
@@ -98,7 +98,7 @@ bool Game_Init()
 	// Iniciar SDL_ttf
 	if (TTF_Init() == -1)
 	{
-		printDebug("No se pudo iniciar TTF: %s\n", TTF_GetError());
+		printDebug(LOG_ERROR, "No se pudo iniciar TTF: %s\n", TTF_GetError());
 		return false;
 	}
 
@@ -109,14 +109,14 @@ bool Game_Init()
 	// Iniciar GUI (Nuklear)
 	if (!GUI_Init(window, render, FONTS_DIR JERSEY_FONT, 30))
 	{
-		printDebug("No se pudo iniciar GUI\n");
+		printDebug(LOG_ERROR, "No se pudo iniciar GUI\n");
 		return false;
 	}
 	
 	#ifdef ARDUINO_ON
 	if (!arduinoConnect())
 	{
-		printDebug("No se pudo conectar con Arduino (continuando sin el)\n");
+		printDebug(LOG_WARN, "No se pudo conectar con Arduino (continuando sin el)\n");
 	}
 	#endif
 

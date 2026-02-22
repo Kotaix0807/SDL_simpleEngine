@@ -44,8 +44,9 @@
  */
 typedef enum
 {
-    IMAGE = 0, /** @brief Recurso de tipo imagen. */
-    SOUND      /** @brief Recurso de tipo sonido. */
+    IMAGE = 0,/** @brief Recurso de tipo imagen. */
+    SOUND,    /** @brief Recurso de tipo sonido. */
+    LOG       /** @brief Recurso de tipo log. */
 } valid_type;
 
 /**

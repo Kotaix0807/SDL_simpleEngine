@@ -2,7 +2,6 @@
 
 ## MENU DEBUG
 - [ ] Pre-visualizar FONTS.
-- [ ] LogFiles.
 
 ## OTROS
 

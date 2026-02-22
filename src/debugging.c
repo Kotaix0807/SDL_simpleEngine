@@ -1,73 +1,142 @@
+/**
+ * @file debugging.c
+ * @brief Herramientas de depuracion visual: frame debug, metricas de
+ *        rendimiento, font debug y menu centralizado.
+ */
+
 // ============================================================
 // Includes
 // ============================================================
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
 
-#include <SDL_render.h>
-#include "SDL_events.h"
-#include "SDL_rect.h"
+#define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
 
 #include "config.h"
 #include "debugging.h"
 #include "engine.h"
 #include "gui.h"
 #include "img.h"
+#include "text.h"
 #include "tools.h"
 
 // ============================================================
-// Variables - Estados de los modulos de depuracion
+// Estados de los modulos (privados)
 // ============================================================
 
-FrameDebugState  fdState  = FDEBUG_OFF;
-PerfMetricsState pmState  = PERF_METRICS_OFF;
-DebMenuState     mnState  = DEB_MENU_OFF;
-TtfDebugState    ttfState = TTF_DEBUG_OFF;
+static bool debugMenuActive   = false;
+static bool frameDebugActive  = false;
+static bool perfMetricsActive = false;
+static bool fontDebugActive   = false;
 
 // ============================================================
 // Variables - Frame Debug (privadas)
 // ============================================================
 
-SDL_Rect *framePointer = NULL;
+static SDL_Rect *framePointer = NULL;
+static texture sprites   = {0};
+static int inputImageNum = 0;
+static int inputFrameW   = 16;
+static int inputFrameH   = 16;
+static float zoom        = 1.0f;
+static int panX          = 0;
+static int panY          = 0;
+static bool dragging     = false;
+static int lastMouseX    = 0;
+static int lastMouseY    = 0;
 
-static texture sprites   = {0};   ///< Sprites cargados desde SPRITES_DIR
-static int inputImageNum = 0;     ///< Indice de imagen seleccionada
-static int inputFrameW   = 16;    ///< Ancho de frame configurado
-static int inputFrameH   = 16;    ///< Alto de frame configurado
-static float zoom        = 1.0f;  ///< Nivel de zoom (0.1x - 10.0x)
-static int panX          = 0;     ///< Desplazamiento horizontal (arrastre)
-static int panY          = 0;     ///< Desplazamiento vertical (arrastre)
-static bool dragging     = false; ///< Indica si se arrastra con el mouse
-static int lastMouseX    = 0;     ///< Ultima posicion X durante arrastre
-static int lastMouseY    = 0;     ///< Ultima posicion Y durante arrastre
+// ============================================================
+// Variables - Font Debug (privadas)
+// ============================================================
+
+static const char *fontNames[] = {"PressStart2P", "LcdSolid", "VT323", "Jersey10"};
+static const char *fontFiles[] = {ARCADE_FONT, LCD_FONT, VT_FONT, JERSEY_FONT};
+#define FONT_COUNT 4
+
+static int fontIndex           = 0;
+static int fontSize            = 24;
+static TTF_Font *debugFont     = NULL;
+static SDL_Texture *previewTex = NULL;
+static char previewText[128]   = "AaBbCc 0123456789 !@#";
+static int previewLen          = 21;
+
+// ============================================================
+// Forward declarations (funciones static)
+// ============================================================
+
+static void toggleFrameDebug(void);
+static void toggleFontDebug(void);
+static void exitFontDebug(void);
+
+// ============================================================
+// Helpers (privados)
+// ============================================================
+
+/// Renderiza la preview del font debug.
+static void rebuildFontPreview(void)
+{
+    if (previewTex)
+    {
+        SDL_DestroyTexture(previewTex);
+        previewTex = NULL;
+    }
+
+    if (!debugFont || previewText[0] == '\0')
+        return;
+
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Surface *srf = TTF_RenderUTF8_Blended(debugFont, previewText, white);
+    if (!srf)
+        return;
+
+    previewTex = SDL_CreateTextureFromSurface(render, srf);
+    SDL_FreeSurface(srf);
+}
+
+/// Recarga la fuente con el indice y tamanho actuales.
+static void reloadDebugFont(void)
+{
+    if (debugFont)
+    {
+        TTF_CloseFont(debugFont);
+        debugFont = NULL;
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s", FONTS_DIR, fontFiles[fontIndex]);
+    debugFont = TTF_OpenFont(path, fontSize);
+    if (!debugFont)
+        printDebug(LOG_WARN, "No se pudo cargar fuente '%s': %s\n", path, TTF_GetError());
+
+    rebuildFontPreview();
+}
 
 // ============================================================
 // Debug Menu
 // ============================================================
 
-void toggleDebugMenu(void)
+static void toggleDebugMenu(void)
 {
     exitFrameDebug();
-    pmState = PERF_METRICS_OFF;
+    perfMetricsActive = false;
+    fontDebugActive = false;
 
-    if (mnState == DEB_MENU_ON)
-    {
-        mnState = DEB_MENU_OFF;
-        return;
-    }
-
-    mnState = DEB_MENU_ON;
+    debugMenuActive = !debugMenuActive;
 }
 
-void renderDebugMenu(void)
+static void closeDebugMenu(struct nk_context *ctx)
 {
-    if (mnState == DEB_MENU_OFF)
+    debugMenuActive = false;
+    ctx->style.window.header.title_align = NK_TEXT_LEFT;
+    nk_end(ctx);
+}
+
+static void renderDebugMenu(void)
+{
+    if (!debugMenuActive)
         return;
 
-    static int winW = 250;
-    static int winH = 170;
+    int winW = 250;
+    int winH = 170;
 
     struct nk_context *ctx = GUI_GetContext();
     ctx->style.window.header.title_align = NK_TEXT_CENTERED;
@@ -81,7 +150,7 @@ void renderDebugMenu(void)
         nk_layout_row_dynamic(ctx, 30, 1);
         if (nk_button_label(ctx, "Frame Debug"))
         {
-            loadFrameDebug();
+            toggleFrameDebug();
             closeDebugMenu(ctx);
             return;
         }
@@ -89,7 +158,7 @@ void renderDebugMenu(void)
         nk_layout_row_dynamic(ctx, 30, 1);
         if (nk_button_label(ctx, "Perf. Metrics"))
         {
-            togglePerfMetrics();
+            perfMetricsActive = !perfMetricsActive;
             closeDebugMenu(ctx);
             return;
         }
@@ -97,6 +166,7 @@ void renderDebugMenu(void)
         nk_layout_row_dynamic(ctx, 30, 1);
         if (nk_button_label(ctx, "Font Debug"))
         {
+            toggleFontDebug();
             closeDebugMenu(ctx);
             return;
         }
@@ -112,38 +182,13 @@ void renderDebugMenu(void)
     ctx->style.window.header.title_align = NK_TEXT_LEFT;
 }
 
-void closeDebugMenu(struct nk_context *ctx)
-{
-    mnState = DEB_MENU_OFF;
-    ctx->style.window.header.title_align = NK_TEXT_LEFT;
-    nk_end(ctx);
-}
-
 // ============================================================
 // Frame Debug
 // ============================================================
 
-/// Inicializa el frame pointer y pasa al estado FDEBUG_ACTIVE.
-static void activateFrameDebug(void)
+static void toggleFrameDebug(void)
 {
-    framePointer = malloc(sizeof(SDL_Rect));
-    if (!framePointer)
-        return;
-
-    framePointer->x = 0;
-    framePointer->y = 0;
-    framePointer->w = inputFrameW;
-    framePointer->h = inputFrameH;
-
-    panX = 0;
-    panY = 0;
-
-    fdState = FDEBUG_ACTIVE;
-}
-
-void loadFrameDebug(void)
-{
-    if (fdState != FDEBUG_OFF)
+    if (frameDebugActive)
     {
         exitFrameDebug();
         return;
@@ -156,108 +201,16 @@ void loadFrameDebug(void)
     inputImageNum = 0;
     inputFrameW   = 16;
     inputFrameH   = 16;
+    zoom          = 1.0f;
+    panX          = 0;
+    panY          = 0;
 
-    activateFrameDebug();
-}
+    framePointer = malloc(sizeof(SDL_Rect));
+    if (!framePointer)
+        return;
 
-void handleDebugEvent(SDL_Event event)
-{
-    SDL_Keycode key = event.key.keysym.sym;
-
-    switch (event.type)
-    {
-        case SDL_KEYDOWN:
-        {
-            if (key == SDLK_F3)
-            {
-                toggleDebugMenu();
-                return;
-            }
-
-            if (fdState != FDEBUG_ACTIVE)
-                return;
-
-            // Limites basados en el tamanho de la imagen y el frame
-            int maxX = sprites.rects[inputImageNum]->w - framePointer->w;
-            int maxY = sprites.rects[inputImageNum]->h - framePointer->h;
-
-            // Mover en pasos del tamanho del frame
-            if (key == SDLK_LEFT)
-                framePointer->x -= framePointer->w;
-            if (key == SDLK_RIGHT)
-                framePointer->x += framePointer->w;
-            if (key == SDLK_UP)
-                framePointer->y -= framePointer->h;
-            if (key == SDLK_DOWN)
-                framePointer->y += framePointer->h;
-
-            // Wrap-around
-            if (framePointer->x < 0)
-                framePointer->x = maxX;
-            else if (framePointer->x > maxX)
-                framePointer->x = 0;
-
-            if (framePointer->y < 0)
-                framePointer->y = maxY;
-            else if (framePointer->y > maxY)
-                framePointer->y = 0;
-            break;
-        }
-        case SDL_MOUSEBUTTONDOWN:
-        {
-            if (fdState != FDEBUG_ACTIVE)
-                break;
-            if (event.button.button == SDL_BUTTON_LEFT)
-            {
-                int imgW = sprites.rects[inputImageNum]->w * zoom;
-                int imgH = sprites.rects[inputImageNum]->h * zoom;
-                int imgX = (config.WIN_W - imgW) / 2 + panX;
-                int imgY = (config.WIN_H - imgH) / 2 + panY;
-
-                SDL_Point mousePoint = {event.button.x, event.button.y};
-                SDL_Rect spriteRect  = {imgX, imgY, imgW, imgH};
-
-                // Solo arrastrar si el mouse esta sobre la textura
-                if (SDL_PointInRect(&mousePoint, &spriteRect))
-                {
-                    dragging   = true;
-                    lastMouseX = event.button.x;
-                    lastMouseY = event.button.y;
-                }
-            }
-            break;
-        }
-        case SDL_MOUSEBUTTONUP:
-        {
-            if (event.button.button == SDL_BUTTON_LEFT)
-                dragging = false;
-            break;
-        }
-        case SDL_MOUSEMOTION:
-        {
-            if (dragging)
-            {
-                panX      += event.motion.x - lastMouseX;
-                panY      += event.motion.y - lastMouseY;
-                lastMouseX = event.motion.x;
-                lastMouseY = event.motion.y;
-            }
-            break;
-        }
-        case SDL_MOUSEWHEEL:
-        {
-            float dy = event.wheel.preciseY;
-            if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
-                dy *= -1;
-
-            zoom += dy * 0.1f;
-            if (zoom < 0.1f)
-                zoom = 0.1f;
-            if (zoom > 10.0f)
-                zoom = 10.0f;
-            break;
-        }
-    }
+    *framePointer = (SDL_Rect){0, 0, inputFrameW, inputFrameH};
+    frameDebugActive = true;
 }
 
 void exitFrameDebug(void)
@@ -269,18 +222,18 @@ void exitFrameDebug(void)
     }
 
     freeTextureLib(&sprites);
-    fdState = FDEBUG_OFF;
+    frameDebugActive = false;
 }
 
-void renderFrameDebug(void)
+static void renderFrameDebug(void)
 {
-    if (fdState == FDEBUG_OFF)
+    if (!frameDebugActive)
         return;
 
     framePointer->w = inputFrameW;
     framePointer->h = inputFrameH;
 
-    // --- Panel de configuracion Nuklear ---
+    // --- Panel Nuklear ---
     struct nk_context *ctx = GUI_GetContext();
     if (nk_begin(ctx, "Frame Debug",
                  nk_rect(0, 0, 300, 220),
@@ -306,18 +259,14 @@ void renderFrameDebug(void)
         nk_layout_row_dynamic(ctx, 50, 1);
         nk_label(ctx, buffer, NK_TEXT_LEFT);
 
-        // Resetear posicion si cambio la imagen
         if (inputImageNum != prevImageNum)
         {
             framePointer->x = 0;
             framePointer->y = 0;
             int newW = sprites.rects[inputImageNum]->w;
             int newH = sprites.rects[inputImageNum]->h;
-
-            if (inputFrameW > newW)
-                inputFrameW = newW;
-            if (inputFrameH > newH)
-                inputFrameH = newH;
+            if (inputFrameW > newW) inputFrameW = newW;
+            if (inputFrameH > newH) inputFrameH = newH;
         }
     }
     else
@@ -328,7 +277,7 @@ void renderFrameDebug(void)
     }
     nk_end(ctx);
 
-    // --- Dibujar sprite + rectangulo selector ---
+    // --- Dibujar sprite + selector ---
     int imgW = sprites.rects[inputImageNum]->w * zoom;
     int imgH = sprites.rects[inputImageNum]->h * zoom;
     int imgX = (config.WIN_W - imgW) / 2 + panX;
@@ -338,7 +287,6 @@ void renderFrameDebug(void)
     SDL_RenderCopy(render, sprites.textures_array[inputImageNum],
                    sprites.rects[inputImageNum], &spriteRect);
 
-    // Rectangulo rojo sobre el frame seleccionado
     SDL_Rect drawRect = {
         .x = (int)(framePointer->x * zoom) + imgX,
         .y = (int)(framePointer->y * zoom) + imgY,
@@ -352,24 +300,13 @@ void renderFrameDebug(void)
 // Performance Metrics
 // ============================================================
 
-void togglePerfMetrics(void)
+static void renderPerfMetrics(void)
 {
-    if (pmState == PERF_METRICS_ON)
-    {
-        pmState = PERF_METRICS_OFF;
-        return;
-    }
-
-    pmState = PERF_METRICS_ON;
-}
-
-void renderPerfMetrics(void)
-{
-    if (pmState == PERF_METRICS_OFF)
+    if (!perfMetricsActive)
         return;
 
-    static int winW = 350;
-    static int winH = 140;
+    int winW = 350;
+    int winH = 140;
 
     struct nk_context *ctx = GUI_GetContext();
     if (nk_begin(ctx, "Performance Metrics",
@@ -393,48 +330,209 @@ void renderPerfMetrics(void)
     else
     {
         nk_end(ctx);
+        perfMetricsActive = false;
         return;
     }
     nk_end(ctx);
 }
 
 // ============================================================
-// Font Debug (stub)
+// Font Debug
 // ============================================================
 
-void renderFontDebug(void)
+static void toggleFontDebug(void)
 {
-    if (ttfState == TTF_DEBUG_OFF)
+    if (fontDebugActive)
+    {
+        exitFontDebug();
+        return;
+    }
+
+    fontIndex = 0;
+    fontSize  = 24;
+    reloadDebugFont();
+    fontDebugActive = true;
+}
+
+static void exitFontDebug(void)
+{
+    if (debugFont)
+    {
+        TTF_CloseFont(debugFont);
+        debugFont = NULL;
+    }
+    if (previewTex)
+    {
+        SDL_DestroyTexture(previewTex);
+        previewTex = NULL;
+    }
+    fontDebugActive = false;
+}
+
+static void renderFontDebug(void)
+{
+    if (!fontDebugActive)
         return;
 
-    static int winW = 250;
-    static int winH = 140;
+    int winW = 400;
+    int winH = 250;
 
     struct nk_context *ctx = GUI_GetContext();
-    ctx->style.window.header.title_align = NK_TEXT_CENTERED;
-
-    if (nk_begin(ctx, "Font Debug", nk_rect(
-        centerI(config.WIN_W, winW),
-        centerI(config.WIN_H, winH),
-        winW, winH),
-        NK_WINDOW_BORDER | NK_WINDOW_MOVABLE))
+    if (nk_begin(ctx, "Font Debug",
+                 nk_rect(centerI(config.WIN_W, winW),
+                         centerI(config.WIN_H, winH),
+                         winW, winH),
+                 NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE))
     {
-        // TODO: implementar contenido de Font Debug
+        int prevIndex = fontIndex;
+        int prevSize  = fontSize;
+
+        // Selector de fuente
+        nk_layout_row_dynamic(ctx, 30, 1);
+        fontIndex = nk_combo(ctx, fontNames, FONT_COUNT, fontIndex, 25, nk_vec2(200, 120));
+
+        // Tamanho
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_property_int(ctx, "Size:", 8, &fontSize, 72, 1, 1);
+
+        // Campo de texto para preview
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_edit_string(ctx, NK_EDIT_SIMPLE, previewText, &previewLen,
+                       (int)sizeof(previewText) - 1, nk_filter_default);
+
+        // Recargar si cambio fuente o tamanho
+        if (fontIndex != prevIndex || fontSize != prevSize)
+            reloadDebugFont();
+
+        // Info de la fuente
+        if (debugFont)
+        {
+            char info[64];
+            snprintf(info, sizeof(info), "%s  %dpx", fontNames[fontIndex], fontSize);
+            nk_layout_row_dynamic(ctx, 20, 1);
+            nk_label(ctx, info, NK_TEXT_CENTERED);
+        }
     }
     else
     {
         nk_end(ctx);
-        ctx->style.window.header.title_align = NK_TEXT_LEFT;
+        exitFontDebug();
         return;
     }
-
     nk_end(ctx);
-    ctx->style.window.header.title_align = NK_TEXT_LEFT;
+
+    // --- Preview renderizada con SDL ---
+    previewText[previewLen] = '\0';
+    rebuildFontPreview();
+
+    if (previewTex)
+    {
+        int texW, texH;
+        SDL_QueryTexture(previewTex, NULL, NULL, &texW, &texH);
+
+        SDL_Rect dst = {
+            centerI(config.WIN_W, texW),
+            config.WIN_H / 2 + winH / 2 + 20,
+            texW, texH
+        };
+        SDL_RenderCopy(render, previewTex, NULL, &dst);
+    }
 }
 
-void exitFontDebug(void)
+// ============================================================
+// Eventos
+// ============================================================
+
+void handleDebugEvent(SDL_Event event)
 {
-    ttfState = TTF_DEBUG_OFF;
+    SDL_Keycode key = event.key.keysym.sym;
+
+    switch (event.type)
+    {
+        case SDL_KEYDOWN:
+        {
+            if (key == SDLK_F3)
+            {
+                toggleDebugMenu();
+                return;
+            }
+
+            if (!frameDebugActive)
+                return;
+
+            int maxX = sprites.rects[inputImageNum]->w - framePointer->w;
+            int maxY = sprites.rects[inputImageNum]->h - framePointer->h;
+
+            if (key == SDLK_LEFT)  framePointer->x -= framePointer->w;
+            if (key == SDLK_RIGHT) framePointer->x += framePointer->w;
+            if (key == SDLK_UP)    framePointer->y -= framePointer->h;
+            if (key == SDLK_DOWN)  framePointer->y += framePointer->h;
+
+            if (framePointer->x < 0)         
+                framePointer->x = maxX;
+            else if (framePointer->x > maxX)
+                framePointer->x = 0;
+
+            if (framePointer->y < 0)         
+                framePointer->y = maxY;
+            else if (framePointer->y > maxY)  
+                framePointer->y = 0;
+
+            break;
+        }
+        case SDL_MOUSEBUTTONDOWN:
+        {
+            if (!frameDebugActive || event.button.button != SDL_BUTTON_LEFT)
+                break;
+
+            int imgW = sprites.rects[inputImageNum]->w * zoom;
+            int imgH = sprites.rects[inputImageNum]->h * zoom;
+            int imgX = (config.WIN_W - imgW) / 2 + panX;
+            int imgY = (config.WIN_H - imgH) / 2 + panY;
+
+            SDL_Point mousePoint = {event.button.x, event.button.y};
+            SDL_Rect  spriteRect = {imgX, imgY, imgW, imgH};
+
+            if (SDL_PointInRect(&mousePoint, &spriteRect))
+            {
+                dragging   = true;
+                lastMouseX = event.button.x;
+                lastMouseY = event.button.y;
+            }
+            break;
+        }
+        case SDL_MOUSEBUTTONUP:
+        {
+            if (event.button.button == SDL_BUTTON_LEFT)
+                dragging = false;
+            break;
+        }
+        case SDL_MOUSEMOTION:
+        {
+            if (dragging)
+            {
+                panX      += event.motion.x - lastMouseX;
+                panY      += event.motion.y - lastMouseY;
+                lastMouseX = event.motion.x;
+                lastMouseY = event.motion.y;
+            }
+            break;
+        }
+        case SDL_MOUSEWHEEL:
+        {
+            if (!frameDebugActive)
+                break;
+
+            float dy = event.wheel.preciseY;
+            if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
+                dy *= -1;
+
+            zoom += dy * 0.1f;
+            if (zoom < 0.1f)  zoom = 0.1f;
+            if (zoom > 10.0f) zoom = 10.0f;
+            break;
+        }
+    }
 }
 
 // ============================================================
@@ -445,5 +543,6 @@ void renderDebug(void)
 {
     renderFrameDebug();
     renderPerfMetrics();
+    renderFontDebug();
     renderDebugMenu();
 }

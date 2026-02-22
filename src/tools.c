@@ -10,8 +10,8 @@
 // Includes
 // ============================================================
 
-#include <stdio.h>
 #define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
 
 #include "config.h"
 #include "tools.h"
@@ -216,6 +216,8 @@ char *typeAdmited(valid_type type)
             return "imagen";
         case SOUND:
             return "sonido";
+        case LOG:
+            return "log";
         default:
             return "desconocido";
     }
@@ -415,6 +417,7 @@ int centerI(int a, int b)
 // Metricas de sistema
 // ============================================================
 
+/** @brief Devuelve el uso de CPU del programa*/
 float getCpuUsage(void)
 {
     static unsigned long prev_utime = 0, prev_stime = 0;
@@ -466,6 +469,7 @@ float getCpuUsage(void)
     return cpu;
 }
 
+/** @brief Devuelve el uso de memoria RAM en MB*/
 long getMemoryUsageMB(void)
 {
     FILE *f = fopen("/proc/self/status", "r");
@@ -487,6 +491,7 @@ long getMemoryUsageMB(void)
     return -1;
 }
 
+/** @brief Devuelve la fecha actual*/
 char *get_date(timeMesureUnit unit, dateSeparator separator, dateFormat region)
 {
     static char date[64];
@@ -586,6 +591,7 @@ char *get_date(timeMesureUnit unit, dateSeparator separator, dateFormat region)
     return date;
 }
 
+/** @brief Iniciar el uso de logs.*/
 void initLog()
 {
     if(!DirExists(LOGS_DIR))
@@ -598,6 +604,7 @@ void initLog()
         printDebug(LOG_ERROR, "Error, no se pudo crear el archivo log...\n");
 }
 
+/** @brief Cerrar el uso de logs.*/
 void closeLog()
 {
     if(logFile)
@@ -609,7 +616,25 @@ void closeLog()
         return;
 }
 
-#define TOOLS_DEBUG
+void cleanLogFolder()
+{
+    int logsCount = 0;
+    char **logFiles = getFilesFromDir(LOGS_DIR, &logsCount, NULL, 0, LOG);
+    if (!logFiles)
+        return;
+
+    for(int i = 0; i < logsCount; i++)
+    {
+        char fullpath[256];
+        snprintf(fullpath, sizeof(fullpath), "%s%s", LOGS_DIR, logFiles[i]);
+
+        if (remove(fullpath) != 0)
+            printDebug(LOG_WARN, "No se pudo eliminar el archivo '%s'\n", fullpath);
+    }
+    freeStringArray(logFiles, logsCount);
+}
+
+//#define TOOLS_DEBUG
 
 #ifdef TOOLS_DEBUG
 
@@ -617,8 +642,9 @@ int main()
 {
     config.debug_mode = true;
     initLog();
-    printDebug(LOG_INFO, "Hola log file del %s!\n", get_date(ALL, DASH, ISO));
+    printDebug(LOG_INFO, "Hola log file del %s!\n", get_date(0, 0, ISO));
     closeLog();
+    cleanLogFolder();
 
     return 0;
 }

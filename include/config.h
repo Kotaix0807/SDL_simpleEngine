@@ -62,7 +62,7 @@
 #define ARCADE "arcade.ini"
 
 /** @brief Archivo de configuracion activo seleccionado para la compilacion. */
-#define CFG_FILE HD
+#define CFG_FILE ARCADE
 
 // ============================================================
 // Tipos

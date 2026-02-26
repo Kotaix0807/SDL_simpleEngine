@@ -4,7 +4,7 @@ SANITIZERS ?=
 LSAN_SUPP  = lsan.supp
 CFLAGS  = $(CFLAGS_BASE) $(SANITIZERS) `sdl2-config --cflags` `pkg-config --cflags gtk+-3.0` -Ilib
 LDFLAGS = $(SANITIZERS)
-LDLIBS = `sdl2-config --libs` `pkg-config --libs gtk+-3.0` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lm
+LDLIBS = `sdl2-config --libs` `pkg-config --libs gtk+-3.0` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lcjson -lm
 
 SRC_DIR   = src
 BUILD_DIR = build

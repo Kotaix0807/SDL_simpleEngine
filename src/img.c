@@ -213,10 +213,13 @@ void drawImage(int x, int y, int w, int h, SDL_Texture *texture)
 }
 
 // Dibuja las aristas de un rectangulo con el color especificado.
-void renderRect(SDL_Rect *rect, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
+void renderRect(SDL_Rect *rect, bool fill, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
 	SDL_SetRenderDrawColor(render, r, g, b, a);
-	SDL_RenderDrawRect(render, rect);
+	if(fill)
+		SDL_RenderFillRect(render, rect);
+	else
+		SDL_RenderDrawRect(render, rect);
 }
 
 

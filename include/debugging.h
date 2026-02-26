@@ -42,11 +42,11 @@ void handleDebugEvent(SDL_Event event);
 void renderDebug(void);
 
 /**
- * @brief Sale del modo frame debug y libera los recursos asociados.
+ * @brief Libera todos los recursos de depuracion.
  *
- * Libera el frame pointer, la libreria de texturas y desactiva
- * el frame debug. Seguro llamar aunque no este activo.
+ * Cierra frame debug, font debug y desactiva todos los modulos.
+ * Llamar desde Game_Destroy().
  */
-void exitFrameDebug(void);
+void exitDebug(void);
 
 #endif

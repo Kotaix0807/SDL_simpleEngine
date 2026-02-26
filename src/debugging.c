@@ -8,6 +8,7 @@
 // Includes
 // ============================================================
 
+#include <stdbool.h>
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 
@@ -64,6 +65,7 @@ static int previewLen          = 21;
 // ============================================================
 
 static void toggleFrameDebug(void);
+static void exitFrameDebug(void);
 static void toggleFontDebug(void);
 static void exitFontDebug(void);
 
@@ -137,6 +139,11 @@ static void renderDebugMenu(void)
 
     int winW = 250;
     int winH = 170;
+    if (winW > config.WIN_W - 20) winW = config.WIN_W - 20;
+    if (winH > config.WIN_H - 40) winH = config.WIN_H - 40;
+
+    int rowH = 30;
+    if (winH < 170) { rowH = (winH - 50) / 3; if (rowH < 15) rowH = 15; }
 
     struct nk_context *ctx = GUI_GetContext();
     ctx->style.window.header.title_align = NK_TEXT_CENTERED;
@@ -147,7 +154,7 @@ static void renderDebugMenu(void)
         winW, winH),
         NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_MOVABLE))
     {
-        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_layout_row_dynamic(ctx, rowH, 1);
         if (nk_button_label(ctx, "Frame Debug"))
         {
             toggleFrameDebug();
@@ -155,7 +162,7 @@ static void renderDebugMenu(void)
             return;
         }
 
-        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_layout_row_dynamic(ctx, rowH, 1);
         if (nk_button_label(ctx, "Perf. Metrics"))
         {
             perfMetricsActive = !perfMetricsActive;
@@ -163,7 +170,7 @@ static void renderDebugMenu(void)
             return;
         }
 
-        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_layout_row_dynamic(ctx, rowH, 1);
         if (nk_button_label(ctx, "Font Debug"))
         {
             toggleFontDebug();
@@ -213,7 +220,7 @@ static void toggleFrameDebug(void)
     frameDebugActive = true;
 }
 
-void exitFrameDebug(void)
+static void exitFrameDebug(void)
 {
     if (framePointer)
     {
@@ -234,9 +241,14 @@ static void renderFrameDebug(void)
     framePointer->h = inputFrameH;
 
     // --- Panel Nuklear ---
+    int panelW = 300;
+    int panelH = 220;
+    if (panelW > config.WIN_W - 10) panelW = config.WIN_W - 10;
+    if (panelH > config.WIN_H - 10) panelH = config.WIN_H - 10;
+
     struct nk_context *ctx = GUI_GetContext();
     if (nk_begin(ctx, "Frame Debug",
-                 nk_rect(0, 0, 300, 220),
+                 nk_rect(0, 0, panelW, panelH),
                  NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE))
     {
         int prevImageNum = inputImageNum;
@@ -293,7 +305,7 @@ static void renderFrameDebug(void)
         .w = (int)(framePointer->w * zoom),
         .h = (int)(framePointer->h * zoom)
     };
-    renderRect(&drawRect, 255, 0, 0, 255);
+    renderRect(&drawRect, false, 255, 0, 0, 255);
 }
 
 // ============================================================
@@ -307,6 +319,8 @@ static void renderPerfMetrics(void)
 
     int winW = 350;
     int winH = 140;
+    if (winW > config.WIN_W - 20) winW = config.WIN_W - 20;
+    if (winH > config.WIN_H - 20) winH = config.WIN_H - 20;
 
     struct nk_context *ctx = GUI_GetContext();
     if (nk_begin(ctx, "Performance Metrics",
@@ -376,6 +390,11 @@ static void renderFontDebug(void)
 
     int winW = 400;
     int winH = 250;
+    if (winW > config.WIN_W - 10) winW = config.WIN_W - 10;
+    if (winH > config.WIN_H - 40) winH = config.WIN_H - 40;
+
+    int comboW = winW - 20;
+    if (comboW > 200) comboW = 200;
 
     struct nk_context *ctx = GUI_GetContext();
     if (nk_begin(ctx, "Font Debug",
@@ -389,7 +408,7 @@ static void renderFontDebug(void)
 
         // Selector de fuente
         nk_layout_row_dynamic(ctx, 30, 1);
-        fontIndex = nk_combo(ctx, fontNames, FONT_COUNT, fontIndex, 25, nk_vec2(200, 120));
+        fontIndex = nk_combo(ctx, fontNames, ARRAY_L(fontFiles), fontIndex, 25, nk_vec2(comboW, 120));
 
         // Tamanho
         nk_layout_row_dynamic(ctx, 30, 1);
@@ -456,7 +475,6 @@ void handleDebugEvent(SDL_Event event)
                 toggleDebugMenu();
                 return;
             }
-
             if (!frameDebugActive)
                 return;
 
@@ -538,6 +556,14 @@ void handleDebugEvent(SDL_Event event)
 // ============================================================
 // Master
 // ============================================================
+
+void exitDebug(void)
+{
+    exitFrameDebug();
+    exitFontDebug();
+    debugMenuActive   = false;
+    perfMetricsActive = false;
+}
 
 void renderDebug(void)
 {

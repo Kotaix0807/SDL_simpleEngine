@@ -2,6 +2,7 @@
 #ifndef MAIN_DEBUG
 
 #include "engine.h"
+
 int main()
 {
     INSTANCE = Game_Init();

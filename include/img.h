@@ -90,12 +90,13 @@ void drawImage(int x, int y, int w, int h, SDL_Texture *texture);
 
 /**
  * @brief Dibuja las aristas de un rectangulo con un color RGBA.
- * @param rect Rectangulo a dibujar.
+ * @param rect Rectangulo vacio a dibujar.
+ * @param fill Rectangulo relleno.
  * @param r Componente rojo (0-255).
  * @param g Componente verde (0-255).
  * @param b Componente azul (0-255).
  * @param a Componente alpha (0-255).
  */
-void renderRect(SDL_Rect *rect, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+void renderRect(SDL_Rect *rect, bool fill, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
 
 #endif

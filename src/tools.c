@@ -44,6 +44,16 @@ int recBinarySearch(int arr[], int left, int right, int key)
 // Sistema de archivos
 // ============================================================
 
+long int fileSize(FILE *fp)
+{
+    if(!fp)
+        return -1;
+    fseek(fp, 0, SEEK_END);
+    long int fileSize = ftell(fp);
+    rewind(fp);
+    return fileSize;
+}
+
 /** @brief Verifica si un directorio existe. */
 bool DirExists(const char *path)
 {
@@ -198,7 +208,7 @@ void printDebug(logLevel level, char *error, ...)
 
     if (logFile)
     {
-        fprintf(logFile, "[%s] [%-5s]", get_date(ALL, DASH, ISO), log_level_str[level]);
+        fprintf(logFile, "[%s] [%-5s] ", get_date(ALL, DASH, ISO), log_level_str[level]);
         va_start(args, error);
         vfprintf(logFile, error, args);
         va_end(args);
@@ -618,6 +628,8 @@ void closeLog()
 
 void cleanLogFolder()
 {
+    if(!logFile)
+        return;
     int logsCount = 0;
     char **logFiles = getFilesFromDir(LOGS_DIR, &logsCount, NULL, 0, LOG);
     if (!logFiles)

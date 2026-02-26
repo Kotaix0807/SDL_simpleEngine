@@ -15,6 +15,7 @@
 #ifdef ARDUINO_ON
 #include "arduino.h"
 #endif
+#include "sprites.h"
 #include "gui.h"
 #include "engine.h"
 #include "config.h"
@@ -45,6 +46,10 @@ int MouseX = 0;
 int MouseY = 0;
 
 TTF_Font *font = NULL;
+texture generalTexLib;
+SDL_Texture *pacSheet;
+AnimatedSprite pacman;
+Sprite laberinto;
 
 // ============================================================
 // Funciones publicas - Ciclo de vida
@@ -54,6 +59,8 @@ TTF_Font *font = NULL;
 // Orden: config -> SDL -> IMG/Audio -> ventana -> render -> TTF -> Text -> GUI -> Arduino.
 bool Game_Init()
 {
+	cleanLogFolder();
+	initLog();
 	// Cargar configuracion desde archivo .ini
 	if(loadConfig(&config, CONFIG_DIR CFG_FILE) != true)
 		return false;
@@ -115,9 +122,7 @@ bool Game_Init()
 	
 	#ifdef ARDUINO_ON
 	if (!arduinoConnect())
-	{
 		printDebug(LOG_WARN, "No se pudo conectar con Arduino (continuando sin el)\n");
-	}
 	#endif
 
 	return true;
@@ -126,7 +131,14 @@ bool Game_Init()
 // Crea los textos del HUD (FPS, mouse).
 void Game_Setup()
 {
-	// Setup del juego
+	generalTexLib = initTextureLib(SPRITES_DIR);
+	laberinto = Sprite_CreateFull(generalTexLib.textures_array[0], 0, 24.0f);
+
+	// Cargar spritesheet de pacman directamente
+	pacSheet = IMG_LoadTexture(render, SPRITES_DIR "general_sheet(Corrected 16x16px).png");
+	Animation eat = Anim_CreateFromSheet(16, 16, 3, 0, 3, 15.0f, true);
+	Animation anims[] = {eat};
+	pacman = ASprite_Create(pacSheet, anims, 1, 100.0f, 100.0f);
 }
 
 // Procesa eventos SDL: cierre, teclas, mouse.
@@ -156,6 +168,7 @@ void Game_KeyboardInput()
 				{
 					config.fullscreen = !config.fullscreen;
 					SDL_SetWindowFullscreen(window, config.fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+					printDebug(LOG_INFO, "Fullscreen: %d\n", config.fullscreen);
 				}
 				break;
 			}
@@ -193,6 +206,21 @@ void Game_UpdateFrame()
 
 	SDL_GetMouseState(&MouseX, &MouseY);
 
+
+	/*
+	for (int i = 0; i < TILES_MAX; i++)
+	{
+		ITEM[i].x += (i % 25) * 32;
+		ITEM[i].y = (i / 25) * 32;
+		ITEM[i].h = 32;
+		ITEM[i].w = 32;
+		ITEM[i].flip = 0;
+		ITEM[i].acum = 0;
+	}
+
+	*/
+	ASprite_Update(&pacman, deltatime);
+
 	float sx, sy;
 	SDL_RenderGetScale(render, &sx, &sy);
 	MouseX = (int)(MouseX / sx);
@@ -209,6 +237,8 @@ void Game_Render()
 	SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
 	SDL_RenderClear(render);
 
+	Sprite_Draw(&laberinto);
+	ASprite_Draw(&pacman);
 
 	renderDebug();
 	GUI_Render();
@@ -219,7 +249,7 @@ void Game_Render()
 void Game_Destroy()
 {
 	Text_QuitSystem();
-	exitFrameDebug();
+	exitDebug();
 
 	#ifdef ARDUINO_ON
 	arduinoDisconnect();
@@ -230,7 +260,11 @@ void Game_Destroy()
 	SDL_DestroyRenderer(render);
 	SDL_DestroyWindow(window);
 
+	ASprite_Free(&pacman);
+	SDL_DestroyTexture(pacSheet);
+
 	quitTexture();
 	quitAudio();
 	SDL_Quit();
+	closeLog();
 }

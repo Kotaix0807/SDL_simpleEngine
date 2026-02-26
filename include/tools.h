@@ -117,6 +117,14 @@ int recBinarySearch(int arr[], int left, int right, int key);
 // ============================================================
 
 /**
+ * @brief Devuelve el tamanho de un archivo.
+ *
+ * @param fp Archivo <- DEBE ESTAR ABIERTO!!.
+ * @return Tamanho. Si no esta abierto el archivo: -1.
+ */
+long int fileSize(FILE *fp);
+
+/**
  * @brief Verifica si existe un directorio.
  *
  * @param path Ruta del directorio.
@@ -326,5 +334,9 @@ void initLog(void);
  * @brief Cierra el archivo de log.
  */
 void closeLog(void);
+/**
+ * @brief Limpia la carpeta de logs.
+ */
+void cleanLogFolder(void);
 
 #endif

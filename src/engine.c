@@ -59,8 +59,8 @@ Sprite laberinto;
 // Orden: config -> SDL -> IMG/Audio -> ventana -> render -> TTF -> Text -> GUI -> Arduino.
 bool Game_Init()
 {
-	cleanLogFolder();
 	initLog();
+	cleanLogFolder();
 	// Cargar configuracion desde archivo .ini
 	if(loadConfig(&config, CONFIG_DIR CFG_FILE) != true)
 		return false;

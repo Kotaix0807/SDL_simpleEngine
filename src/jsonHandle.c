@@ -40,12 +40,10 @@ bool readASpriteFromJSON(const char *jsonFileName)
     free(buffer);
     printDebug(LOG_INFO, "Fase 2: completa, JSON parseado\n");
     
-    cJSON *speed = cJSON_GetObjectItemCaseSensitive(jsonFile, "speed");
+    cJSON *PacMan = cJSON_GetObjectItemCaseSensitive(jsonFile, "PacMan");
     printDebug(LOG_INFO, "Se obtuvo el objeto\n");
 
     cJSON_Delete(jsonFile);
-    printDebug(LOG_INFO, "No se pudo borrar?\n");
-    printf("Dato: %f\n", speed->valuedouble);
     return true;
 }
 
